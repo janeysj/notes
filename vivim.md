@@ -2,6 +2,7 @@
 * vi或者vim打开文本，直接输入/和要查找的字段按回车。Ctrl+n是查找下一个，ctrl+N是查找上一个
 * 打开文件跳到第一个匹配的行
   vim +/search-term filename.txt
+* 如果你输入 "/the"，你也可能找到 "there"。要找到以 "the" 结尾的单词，可以用：/the\> "\>" 是一个特殊的记号，表示只匹配单词末尾。类似地，"\<" 只匹配单词的开头。这样，要匹配一个完整的单词 "the"，只需：/\<the\>  
 * :set hlsearch //高亮显示查找结果
 * 当你看到一个单词，并想找它的next position,光标移动到该单词，并按下 shift+ *.
 * 查看过当前文件目录：Step1： ESC模式下输入1  Step2: ctrl+G

@@ -137,6 +137,12 @@ func main() {
 for k, v := range m {  
     fmt.Printf("k=%v, v=%v\n", k, v)  
 }  
+
+也可以
+for k := range m {  
+    fmt.Printf("k=%v\n", k, v)  
+}  
+但是这样只能遍历各个量，并取到其中的key
 ```
 
 ### IPv4地址和unit之间的转换
@@ -165,4 +171,11 @@ func Uint2IPString(i uint) (string, error) {
 }
 ```
 
-
+### 计算函数运行时间
+可以在函数开始添加如下代码
+```
+    start := time.Now()
+	defer func() {		
+		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
+	}()
+```

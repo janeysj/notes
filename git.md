@@ -25,6 +25,8 @@ git pull 拉下新的分支（not clone），然后才能checkout到此分支
 
 git checkout -- filename 下载指定文件夹
 
+git checkout 123-version 下载指定版本
+
 ## 分支管理
 ### 分支删除
 git branch -D newfeature        确认要删除这个分支
@@ -147,3 +149,6 @@ git checkout -- file.name //撤销本地文件的修改
   2. 如果已经push了多次提交，最后git push -f推送到远端
 
 
+## 常见库在github中的目录
+* k8s.io/client-go/informers 这种也会托管在github.com/kubernetes/client-go/informers
+* golang.org/x/ 这种也会托管在github.com/golang/...

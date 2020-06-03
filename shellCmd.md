@@ -83,6 +83,8 @@
     echo $ml
   done
   ```
+  #### 配合管道操作
+  kubectl get pod -n kube-system | grep voyage-agent | awk '{system("kubectl delete pod "$1" -n kube-system")}'
 
 ### join 将两个文件中，指定栏位内容相同的行连接起来
 注意指定栏位的内容的排列顺序要一致

@@ -145,6 +145,7 @@ $tcpdump host 210.27.48.1 and \ (210.27.48.2 or 210.27.48.3 \)
 截获主机210.27.48.1 和主机210.27.48.2 或210.27.48.3的通信<br>
 $tcpdump -i eth0 src host hostname 截获主机hostname发送的所有数据v
 $tcpdump -i eth0 port 6653 截获主机interface eth0, 6653端口发送的所有数据<br>
+$tcpdump -i eth0 port 6653 or 8080 截获主机interface eth0, 6653或者8080端口发送的所有数据<br>
 -n关闭地址解析<br>
 -e Print the link-level header on each dump line.<br>
 如果即时显示报文可以命令：tcpdump –eni eth0<br>
@@ -180,6 +181,12 @@ taskset -p [mask] pid 。<br>
 CPU负载用uptime, 或者w命令和top命令也行<br>
 查看CPU使用率mpstat -P ALL 2<br>
 (以上命令中的2是间隔2秒显示一次的意思，也可以为1,3…)
+
+# 模块操作
+- lsmod|grep xxx 查看是否已安装xxx模块， 或者 ls /lib/modules/$(uname -r)/kernel/net/sched | grep netem 
+- modprobe xxx 安装xxx模块
+- yum install kernel-modules-extra centos安装扩展模块
+> 注意安装模块时，模块的版本要和系统版本一致，否则无用。可以用hostnamectl查看系统信息，然后 ```yum install module-version```来指定版本安装
  
 # netstat
 $netstat -apn|grep 8000 查看所有端口号为8000的程序连接
@@ -450,9 +457,17 @@ gunzip filename.gz
 在bash里输入：dmidecode -s system-product-name
 或者lshw -class system
 或者dmesg | grep -i virtual
+- hostnamectl 查看本机信息，包括主机名、硬件号、软件版本、体系结构等
+- localectl   查看本地化设置，时区语言等
 
 # 守护进程方法
 ## systemd
+历史上，Linux 的启动一直采用init进程。
+```
+$ sudo /etc/init.d/apache2 start
+# 或者
+$ service apache2 start
+```
 systemd 是centos系统默认的进程守护工具.CentOS6之前系统的服务用SysV控制，CentOS7改为systemd控制。使用systemd 需要在/usr/lib/systemd/system/ 目录下创建一个脚本skynet-server.service，内容如下：
 ```
 [Unit]
@@ -478,6 +493,15 @@ systemctl restart skynet-server //重启程序
 ### ￼journalctl 查看日志
  - journalctl -ru kubelet 查看kubelet当前日志
  - journalctl -fu kubelet  实时查看kubelet日志更新
+ - journalctl -k  查看内核日志（不显示应用日志）
+ - journalctl -b  查看系统本次启动的日志
+ - journalctl --since="2012-10-30 18:17:16" 
+ - journalctl --since "20 min ago"
+ - journalctl --since yesterday
+ - journalctl --since "2015-01-10" --until "2015-01-11 03:00"
+ - journalctl --since 09:00 --until "1 hour ago"
+ - journalctl _PID=1 查看指定进程的日志
+ - journalctl -u nginx.service -u php-fpm.service --since today 合并显示多个 Unit 的日志
 
 ## supervisor 
 1. 官网安装使用手册： http://supervisord.org/installing.html
@@ -575,3 +599,11 @@ mmap: 是一种内存映射文件的方法，即将一个文件或者其它对�
 alias rm='rm -i' //rename command rm
 查看所有别名命令： alias
 ```
+
+# OOM
+## oom_score_adj和oom_score
+假设我们选择在出现OOM状况的时候杀死进程，那么一个很自然的问题就浮现出来：到底干掉哪一个呢？内核的算法倒是非常简单，那就是打分（oom_score，注意，该参数是read only的），找到分数最高的就OK了.
+
+对某一个task进行打分（oom_score）主要有两部分组成，一部分是系统打分，主要是根据该task的内存使用情况。另外一部分是用户打分，也就是oom_score_adj了，该task的实际得分需要综合考虑两方面的打分。如果用户将该task的 oom_score_adj设定成OOM_SCORE_ADJ_MIN（-1000）的话，那么实际上就是禁止了OOM killer杀死该进程。
+
+oom_score_adj的取值范围是-1000～1000，0表示用户不调整oom_score，负值表示要在实际打分值上减去一个折扣，正值表示要惩罚该task，也就是增加该进程的oom_score,例如如果oom_score_adj设定-500，那么表示实际分数要打五折（基数是totalpages），也就是说该任务实际使用的内存要减去可分配的内存上限值的一半。
