@@ -39,6 +39,19 @@ rbreak ^list_
         continue
         end
     断点设置在函数foo中，断点条件是x>0，如果程序被断住后，也就是，一旦x的值在foo函数中大于0，GDB会自动打印出x的值，并继续运行程序。
+### 如果想看程序运行的起点
+编译好程序后，暂时不设置断点，gdb进入函数后输入命令info files查看到Entry point，然后设置这个地址为断点即可。例如：
+```
+(gdb) info files
+Symbols from "/opt/sj/test/example".
+Local exec file:
+        `/opt/sj/test/example', file type elf64-x86-64.
+        Entry point: 0x4683e0
+        ...
+(gdb) b *0x4683e0
+Breakpoint 1 at 0x4683e0: file /usr/local/go/src/runtime/rt0_linux_amd64.s, line 8.
+
+```        
  
 ## 单进程调试
 查看堆栈: bt<br>
@@ -136,6 +149,10 @@ $ms_print massif.out.12076 > profile.txt
 # splint
 splint功能：程序静态分析工具
 常识性测试并产生一些警告信息。它可以检测未经赋值的变量使用，函数的参数未使用等异常情况。
+
+# ifconfig
+- ifconfig #显示的是所有up的端口
+- ifconfig -a #显示多有端口，包括down的端口
  
 # tcpdump
 $tcpdump -w file.name –i any  查看所有端口的包并输出到文件file.name中<br>
@@ -150,7 +167,7 @@ $tcpdump -i eth0 port 6653 or 8080 截获主机interface eth0, 6653或者8080端
 -e Print the link-level header on each dump line.<br>
 如果即时显示报文可以命令：tcpdump –eni eth0<br>
  
-$tcpdump icmp –eni any 截获所有端口的ICMP协议的包，并实时打印到屏幕如下图<br>
+$tcpdump icmp -eni any 截获所有端口的ICMP协议的包，并实时打印到屏幕如下图.<br>
 第一列为时间戳<br>
 第二列为包的方向，P为发出即Push, Out为收<br>
 第三列为srcmac<br>
@@ -161,18 +178,41 @@ $tcpdump icmp –eni any 截获所有端口的ICMP协议的包，并实时打印
 第八列为事物ID<br>
 第九列为seq<br>
 第十列为报文内容，ICMP报文头加ICMP报文Data的长度<br>
+
+## wireshark 解析指定协议，这里以vxlan协议为例
+- 查看enabled protocol,确保vxlan protocol处于enabled状态. Analyze ->Enabled Protocols->Vxlan
+- 调整Wireshark配置，让8472端口的数据包解析为vxlan协议.
+  选中 udp 端口8472 的数据包 -> decode as -> UDP (destination 8472)  decode as -> VXLAN
+  或者    选中 udp 端口8472 的数据包 ->  (菜单栏) Analyze->Decode as -> UDP (destination 8472)  decode as -> VXLAN
+
 # ps
-查看所有进程： ps –A
-查看进程的端口号：ps –ef|grep program-name
-查看整条命令：ps -auxwww | grep 进程号
-查看进程打开的所有文件： lsof –p 进程号
-查看线程属于哪个CPU： ps –eLo psr
-其中L是线程，o指明format, psr 是processor that process is currently assigned to.
-查看第五个参数psr为2的线程的所有参数：
+- 查看所有进程： ps –A
+- 查看进程的端口号：ps –ef|grep program-name
+- 查看整条命令：ps -auxwww | grep 进程号
+- 查看进程打开的所有文件： lsof –p 进程号
+- 查看线程属于哪个CPU： ps –eLo psr
+- 其中L是线程，o指明format, psr 是processor that process is currently assigned to.
+- 查看第五个参数psr为2的线程的所有参数：
 ps -eLo ruser,pid,ppid,lwp,psr,args | awk ‘{if($5==2) print $0}’
+- 查看进程下的线程：ps -T -p <pid>
+- 查看进程13452的进程树，结果中{}表示线程： pstree -aps 13452
+
+# top
+常用的进程和资源消耗查询工具，可以查看开机时间、平均负载、进程线程的资源消耗等
+ - 输入top命令后的 S 列（也就是 Status 列）表示进程的状态： R、D、Z、S、I 等几个状态
+   - R 是 Running 或 Runnable 的缩写，表示进程在 CPU 的就绪队列中，正在运行或者正在等待运行。
+   - D 是 Disk Sleep 的缩写，也就是不可中断状态睡眠（Uninterruptible Sleep），一般表示进程正在跟硬件交互，并且交互过程不允许被其他进程或中断打断。
+   - Z 是 Zombie 的缩写，如果你玩过“植物大战僵尸”这款游戏，应该知道它的意思。它表示僵尸进程，也就是进程实际上已经结束了，但是父进程还没有回收它的资源（比如进程的描述符、PID 等）。
+   - S 是 Interruptible Sleep 的缩写，也就是可中断状态睡眠，表示进程因为等待某个事件而被系统挂起。当进程等待的事件发生时，它会被唤醒并进入 R 状态。
+   - I 是 Idle 的缩写，也就是空闲状态，用在不可中断睡眠的内核线程上。前面说了，硬件交互导致的不可中断进程用 D 表示，但对某些内核线程来说，它们有可能实际上并没有任何负载，用 Idle 正是为了区分这种情况。要注意，D 状态的进程会导致平均负载升高， I 状态的进程却不会。
+   - T 或者 t，也就是 Stopped 或 Traced 的缩写，表示进程处于暂停或者跟踪状态。
+   - X 也就是 Dead 的缩写，表示进程已经消亡，所以你不会在 top 或者 ps 命令中看到它。
+
 # CPU
 查看CPU信息： cat /proc/cpuinfo
                /sys/devices/system/cpu/<br>
+ - 物理核数: grep 'physical id' /proc/cpuinfo|sort|uniq|wc -l 
+ - 逻辑核数: cat /proc/cpuinfo| grep "processor"|wc -l
  
 taskset -p [mask] pid 。<br>
 其中，mask是一个代表了处理器亲和性的掩码数字，转化为二进制表示后，它的值从最低位到最高位分别代表了第一个逻辑CPU到最后一个逻辑CPU，进程调度器可能将该进程调度到所有标为“1”的位代表的CPU上去运行。根据上面的输出，taskset运行之前，QEMU线程的处理器亲和性mask值是0x3（其二进制值为：0011），可知其可能会被调度到cpu0和cpu1上运行；而运行“taskset -p 0x4 3967”命令后，提示新的mask值被设为0x4（其二进制值为：0100），所以该进程就只能被调度到cpu2上去运行，即通过taskset工具实现了vCPU进程绑定到特定的CPU上。<br>
@@ -181,6 +221,20 @@ taskset -p [mask] pid 。<br>
 CPU负载用uptime, 或者w命令和top命令也行<br>
 查看CPU使用率mpstat -P ALL 2<br>
 (以上命令中的2是间隔2秒显示一次的意思，也可以为1,3…)
+
+## 平均负载
+平均负载是指单位时间内，系统处于可运行状态和不可中断状态的平均进程数，也就是平均活跃进程数，它和 CPU 使用率并没有直接关系。这里我先解释下，可运行状态和不可中断状态这俩词儿。所谓可运行状态的进程，是指正在使用 CPU 或者正在等待 CPU 的进程，也就是我们常用 ps 命令看到的，处于 R 状态（Running 或 Runnable）的进程。平均活跃进程数，直观上的理解就是单位时间内的活跃进程数，但它实际上是活跃进程数的指数衰减平均值(被消耗掉的cpu个数)。这个“指数衰减平均”的详细含义你不用计较，这只是系统的一种更快速的计算方式，你把它直接当成活跃进程数的平均值也没问题。一般平均负载超过70%就需要留心了。
+比如当平均负载为 2 时，意味着什么呢？
+ - 在只有 2 个 CPU 的系统上，意味着所有的 CPU 都刚好被完全占用。
+ - 在 4 个 CPU 的系统上，意味着 CPU 有 50% 的空闲。
+ - 而在只有 1 个 CPU 的系统中，则意味着有一半的进程竞争不到 CPU。
+
+ ## 性能指标工具
+  详见同目录下的图《cpu性能分析工具》
+
+ ## TLB
+ TLB（Translation Lookaside Buffer，转译后备缓冲器） 其实就是 MMU 中页表的高速缓存， MMU是存储在 CPU 的内存管理单元。
+
 
 # 模块操作
 - lsmod|grep xxx 查看是否已安装xxx模块， 或者 ls /lib/modules/$(uname -r)/kernel/net/sched | grep netem 
@@ -202,7 +256,18 @@ $netstat -ntu | tail -n +3 | awk '{print $5}' | sort | uniq -c | sort -nr <br>
 
 # ss
 ss is used to dump socket statistics.
-$ss -lnt   查看正在监听的端口
+```
+ss -lnt   查看正在监听的端口
+ss -l 显示本地打开的所有端口
+ss -n 显示数字地址和端口(而不是名字)
+ss -pl 显示每个进程具体打开的socket
+ss -t -a 显示所有tcp socket
+ss -u -a 显示所有的UDP Socekt
+ss -o state established '( dport = :smtp or sport = :smtp )' 显示所有已建立的SMTP连接
+ss -o state established '( dport = :http or sport = :http )' 显示所有已建立的HTTP连接
+ss -x src /tmp/.X11-unix/* 找出所有连接X服务器的进程
+ss -s 列出当前socket详细信息
+```
  
 # wireshark
 ### 过滤源ip、目的ip
@@ -300,6 +365,7 @@ net.ipv4.tcp_syn_retries = 2
 （2）dmesg查看linux内核的环形缓冲区信息，我们可以从中获得诸如系统架构、cpu、挂载的硬件，RAM等多个运行级别的大量的系统信息
 # AB
 安装 yum install httpd-tools
+ab是http压测工具，默认发起的是http1.0连接，但应答可能是http1.1或者http2.0
 ### Get某个文件
 ./ab -n 2000000 -c 20 http://10.189.255.119:12345/40x.html
  
@@ -313,12 +379,54 @@ ab -n 1 -v 4 -p ipbody.txt -T application/json -H "User-Agent: 11223344"  -H "X-
 ipbody.txt 中的内容:
  {"apiVersion": "v1", "kind": "ipam", "handleid": "test111", "hostname": "test-host", "ipv4pools": ["172.24.0.0/16"], "num4": 1,}
 # iperf
+64位centos安装方法：
+到https://iperf.fr/iperf-download.php下载 找到CentOS 64 bits的rpm包进行安装(rpm -ivh rpm包文件)
+在CentOS 7上使用下列命令即可安装：
+# yum install iperf3
 和netperf类似，用法
+
 ```
+// TCP包
 iperf -c 172.27.36.100 -t 20
+// 8个线程
+iperf -c 172.27.36.100 -t 20 -P 8
+// UDP包
 iperf3 -u -c 172.27.36.100 -b 900m -i 1 -t 120
+//绑定本地网卡地址指定client端口，server端不需要做特殊配置.测试感觉不管用，还有别的端口
+iperf3 -c 172.18.8.129  --cport 5201 --bind 172.18.8.130 
 ```
 其中172.27.36.100是server端地址; -u 打UDP包，打流带宽为900m, -i为显示报告间隔
+
+# wrk
+wrk是高性能http压测工具(如果github打不开，可用码云https://gitee.com/mirrors/wrk)
+## 安装wrk
+```
+git clone https://github.com/wg/wrk.git wrk
+cd wrk
+make
+# 将可执行文件移动到 /usr/local/bin 位置
+sudo cp wrk /usr/local/bin
+```
+
+## 运行wrk
+```
+// 对 www.baidu.com 发起压力测试，线程数为 12，模拟 400 个并发请求，持续 30 秒
+wrk -t12 -c400 -d30s http://www.baidu.com 
+```
+
+
+如果万兆网卡达不到万兆，就要看看网线、交换机是不是都是万兆的。CAT6是千兆线，CAT6A以上的线才是万兆线。
+```
+10000baseT/Full    电口
+1000baseX/Full     光口
+10000baseSR/Full   SR(short range)
+10000baseLR/Full   LR(long range)
+```
+
+## 压测思路
+在CPU、网卡中选一个可以打满的，看另一个的负载指标
+ - 通过绑定wrk端核数，修改server端的核数、timeout时间等尽量提供带宽，减少断链来打满CPU看pps, 或者打满CPU看带宽
+ - 通过绑定wrk端核数，修改server端的核数、timeout时间等尽量提供带宽，减少断链来打满网卡看pps, 或者打满网卡看CPU负载
 
 # Sysbench
 性能测试工具
@@ -337,6 +445,13 @@ sysbench --test='oltp.lua' --mysql-table-engine=innodb --oltp-table-size=1000000
 sysbench --test='oltp.lua' --mysql-table-engine=innodb --init-rng=on --max-time=43200 --oltp-table-size=100000 --max-requests=0 --oltp-read-only=off --mysql-user=root --mysql-password=123456 --mysql-host=172.16.118.134 --mysql-port=3306 --num-threads=200 --db-driver=mysql --mysql-db=test run
  
 sysbench --test='oltp.lua' --mysql-table-engine=innodb --oltp-table-size=1000000 --mysql-user=neutron --mysql-password=123456 --mysql-host=172.16.118.134 --mysql-port=3306 --num-threads=80  --db-driver=mysql --mysql-db=test clean
+```
+
+# stress
+stress 是一个 Linux 系统压力测试工具，这里我们用作异常进程模拟平均负载升高的场景。
+```
+// 在第一个终端运行 stress 命令，模拟一个 CPU 使用率 100% 的场景
+$ stress --cpu 1 --timeout 600
 ```
 
 # Ifstat 网络流量统计工具 
@@ -368,6 +483,7 @@ cat > /etc/sysconfig/network-scripts/ifcfg-ens33 << EOF
 > BROWSER_ONLY="no"
 > BOOTPROTO="static"
 > IPADDR=192.168.19.130
+> PREFIX=24
 > DNS1=192.168.19.2
 > GATEWAY=192.168.19.2
 > DEFROUTE="yes"
@@ -384,6 +500,36 @@ cat > /etc/sysconfig/network-scripts/ifcfg-ens33 << EOF
 > EOF
 ```
   重启网卡：/etc/init.d/network restart
+  可以使用命令nmcli con来查看网卡UUID，如果没有该命令centos系统可通过命令yum -y install NetworkManager来安装
+
+### centos7修改网卡名称
+1. 创建网卡自定义命名文件/etc/udev/rules.d/70-persistent-net.rules, 并填写需要定义的网卡信息，主要是MAC地址和网卡名称NAME, 这里MAC地址不能更改，还是之前的网卡MAC.
+```
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="08:94:ef:2a:88:5c", ATTR{type}=="1", KERNEL=="eth*", NAME="enp3s0f0"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="08:94:ef:2a:88:5d", ATTR{type}=="1", KERNEL=="eth*", NAME="enp3s0f1"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="08:94:ef:2a:88:5e", ATTR{type}=="1", KERNEL=="eth*", NAME="enp3s0f2"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="08:94:ef:2a:88:5f", ATTR{type}=="1", KERNEL=="eth*", NAME="enp3s0f3"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="98:be:94:5f:be:90", ATTR{type}=="1", 
+```
+
+2. 修改或新建网卡配置文件，网卡名字和上面自定义的网卡名保持一致
+/etc/sysconfig/network-scripts下面，例如要把eno1改为enp3s0f2，需要重命名文件并修改文件中关于eno1的关键字为enp3s0f2
+
+3. 禁用centos7默认网卡命名规则,修改文件/etc/default/grub，在GRUB_CMDLINE_LINUX值中添加net.ifnames=0 biosdevname=0.修改后如下：
+```
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DEFAULT=saved
+GRUB_DISABLE_SUBMENU=true
+GRUB_TERMINAL_OUTPUT="console"
+GRUB_CMDLINE_LINUX="crashkernel=auto rd.lvm.lv=centos/root rd.lvm.lv=centos/swap rhgb quiet net.ifnames=0 biosdevname=0"
+GRUB_DISABLE_RECOVERY="true"
+```
+然后执行如下命令修改内核参数
+```grub2-mkconfig -o /boot/grub2/grub2.cfg```
+
+4. 重启服务器生效
+
 
 # lspci
 list all PCI devices，目前主机上面所有的硬件配备<br>
@@ -415,6 +561,9 @@ core就是我们平时说的“核“，每个物理CPU可以双核，四核等�
 thread就是每个core的硬件线程数，即超线程
  
 输入命令cat /proc/cpuinfo 查看physical id有几个，上述结果显示只有0，所以只有一个物理cpu；查看processor有几个，上述结果显示有0和1两个，所以有两个逻辑cpu。
+
+ - 查看网卡型号:   lspci | grep Ethernet
+ - 查看网卡驱动:   ethtool -i eth1 查看输出的第一行driver
  
 # free
 查看内存。displays the total amount of free and used physical and swap memory in the system, as well as the buffers and caches used by the kernel. The information is gathered by pars-       ing /proc/meminfo.
@@ -427,6 +576,9 @@ thread就是每个core的硬件线程数，即超线程
 命令显示linux内核的环形缓冲区信息，我们可以从中获得诸如系统架构、cpu、挂载的硬件，RAM等多个运行级别的大量的系统信息
 源代码
 rpm -qf `which ping` 查看，找到ping属于哪个软件包，下载软件包的源代码就可以看了
+
+# perf
+linux内核支持的软件性能分析的工具
 
 # dig, nslookup 查看域名方法
 
@@ -448,6 +600,14 @@ gunzip filename.gz
 *.tar: tar -xf
 *.tar.gz: tar zxf
 
+## *.xz文件解压
+*.xz: xz -d 
+
+## *.zip
+*解压： unzip xxx.zip
+*压缩： zip -r xxx.zip xxx/
+
+
 # 查看系统是否是虚拟机
 ## Windows：
 在CMD里输入：Systeminfo | findstr /i "System Model"
@@ -457,8 +617,29 @@ gunzip filename.gz
 在bash里输入：dmidecode -s system-product-name
 或者lshw -class system
 或者dmesg | grep -i virtual
-- hostnamectl 查看本机信息，包括主机名、硬件号、软件版本、体系结构等
+- hostnamectl 查看本机信息，包括主机名、硬件号、软件版本、体系结构等, hostnamectl set-hostname xxx 修改主机名
 - localectl   查看本地化设置，时区语言等
+- timedatectl 查看本地时间、时区等，也可用于配置时区信息，eg: timedatectl set-timezone Asia/Shanghai
+- rpm -q centos-release 查看centos版本信息
+
+# 重装系统
+## 查看系统安装时间
+```
+ls -lact --full-time /etc/|tail -1|awk '{print $6,$7}'
+```
+
+## 制作安装U盘
+ 1. 安装最新最新版ultraISO，试用版也可以
+ 2. 下载centos7 iso文件，并用ultralISO写入磁盘。  
+    先打开目标文件，再点击【启动】→点击【写入硬盘映像】→选择【硬盘驱动器】（选为U盘）→选择【写入方式】→点击【写入】
+ 3. 也可以使用软件ventoy,该软件打开就能用，安装到U盘后，可以把多个iso文件同时拷贝到U盘，支持多系统启动盘   
+
+## 使用U盘重装centos7
+ 1. 插拔U盘，使用ls /dev命令查看是U盘设配名，假设u盘设配名为sdc4
+ 2. 不通的主板按键进入安装界面，以F11为例，出现界面Install Centos7选项，这时根据界面提示按Tab或者e键编辑安装配置。修改相关句子为vmlinuz initrd=initrd.img inst.stage2=hd:/dev/sdc4 quiet
+ 3. 根据提示按ctrl+x保存配置进行安装
+ 4. 选择Date和安装类行（minimal,勾选DevelopmentTool）
+ 5. 选择Install Destination, 如果提示不行，多试试按键找到Reclaim Space清空硬盘再试
 
 # 守护进程方法
 ## systemd
@@ -550,13 +731,16 @@ ubuntu, debian系统使用的守护进程
 
 ## chkconfig
 redhat使用的一种开机自启动方式.
-chkconfig --list #列出所有的系统服务。
-chkconfig --add httpd #增加httpd服务。
-chkconfig --del httpd #删除httpd服务。
-chkconfig --level httpd 2345 on #设置httpd在运行级别为2、3、4、5的情况下都是on（开启）的状态。
-chkconfig --list mysqld #列出mysqld服务设置情况。
-chkconfig --level 35 mysqld on #设定mysqld在等级3和5为开机运行服务，--level 35表示操作只在等级3和5执行，on表示启动，off表
+ - chkconfig --list #列出所有的系统服务
+ - chkconfig --add httpd #增加httpd服务
+ - chkconfig httpd on #开机自启动httpd服务
+ - chkconfig --del httpd #删除httpd服务
+ - chkconfig --level httpd 2345 on #设置httpd在运行级别为2、3、4、5的情况下都是on（开启）的状态
+ - chkconfig --list mysqld #列出mysqld服务设置情况
+ - chkconfig --level 35 mysqld on #设定mysqld在等级3和5为开机运行服务，--level 35表示操作只在等级3和5执行，on表示启动，off表
 系统开机时启动的部分服务存储在/etc/init.d/目录下。我们可以把需要开机启动的服务放在这个目录下然后用chkconfig来管理。
+```# chkconfig: 2345 20 80```
+表示脚本应该在运行级 2,3,4,5 启动，启动优先权为20，停止优先权为80。
 
 # vimdiff 
 自带的文本比较与merge工具
@@ -567,6 +751,10 @@ chkconfig --level 35 mysqld on #设定mysqld在等级3和5为开机运行服务�
 3. 线程占有的资源都是不共享的，其中包括：栈，寄存器、状态，程序计数器；线程间共享的是进程的资源有堆，全局变量.data区，静态变量.bss区和代码区text.
 4. 进程间通信方法：信号量(semaphore), 锁（原子操作、自旋锁、读写锁、互斥锁），信号（signal）、消息队列，共享内存，管道和套接字
     线程间通信：锁、信号量、信号、全局变量
+```
+ ps -T -p <pid> //查看指定进程下的线程
+ top -Hp  <pid> //查看指定进程下的线程
+```    
 
 # 后台进程
 后台进程必须与其运行前的环境隔离开来，这些环境包括未关闭的文件描述符、控制终端、会话和进程组、工作目录以及文件创建掩码等。这些环境通常是后台进程从执行它的父进程中继承下来的。但是后台进程在终端关闭的时候会退出，最好使用守护进程。
@@ -607,3 +795,79 @@ alias rm='rm -i' //rename command rm
 对某一个task进行打分（oom_score）主要有两部分组成，一部分是系统打分，主要是根据该task的内存使用情况。另外一部分是用户打分，也就是oom_score_adj了，该task的实际得分需要综合考虑两方面的打分。如果用户将该task的 oom_score_adj设定成OOM_SCORE_ADJ_MIN（-1000）的话，那么实际上就是禁止了OOM killer杀死该进程。
 
 oom_score_adj的取值范围是-1000～1000，0表示用户不调整oom_score，负值表示要在实际打分值上减去一个折扣，正值表示要惩罚该task，也就是增加该进程的oom_score,例如如果oom_score_adj设定-500，那么表示实际分数要打五折（基数是totalpages），也就是说该任务实际使用的内存要减去可分配的内存上限值的一半。
+
+# rpm
+ - rpm -qa|grep kube 查找所有kube相关软件
+ - rpm -e xxx 删除指定软件
+
+# yum 安装
+有时候卸载linux软件会把yum工具误删，可通过如下方法安装
+```
+rpm包可到http://mirror.centos.org/centos/7/os/x86_64/Packages/  和 https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/e/ 找
+安装如下包：
+http://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/e/epel-release-7-11.noarch.rpm
+http://mirror.centos.org/centos/7/os/x86_64/Packages/yum-3.4.3-158.el7.centos.noarch.rpm
+http://mirror.centos.org/centos/7/os/x86_64/Packages/yum-plugin-fastestmirror-1.1.31-45.el7.noarch.rpm
+http://mirror.centos.org/centos/7/os/x86_64/Packages/yum-metadata-parser-1.1.4-10.el7.x86_64.rpm
+http://mirror.centos.org/centos/7/os/x86_64/Packages/libxml2-2.9.1-6.el7_2.3.x86_64.rpm
+
+可能在安装yum和yum-plugin-fastestmirror时互依赖问题，可通过同时安装方式解决：
+rpm -ivh "yum-3.4.3-168.el7.centos.noarch.rpm" "yum-plugin-fastestmirror-1.1.31-54.el7_8.noarch.rpm"
+
+```
+
+# yum源更新
+```
+mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+cd /etc/yum.repos.d/
+wget http://mirrors.163.com/.help/CentOS7-Base-163.repo
+修改上面下载的文件中的releasever为7，可使用vim命令:%s/$releasever/7/g， 注意centos7就改为7，centos6改为6
+yum makecache
+yum -y update
+```
+
+# chmod
+Linux/Unix 的文件调用权限分为三级 : 文件所有者（Owner）、用户组（Group）、其它用户（Other Users）, 每一级用三个位表示：rwx，分别表示是否可读、可写、可执行。
+
+```chmod abc file```
+
+其中a,b,c各为一个数字，分别表示User、Group、及Other的权限。
+
+r=4，w=2，x=1
+若要 rwx 属性则 4+2+1=7；
+若要 rw- 属性则 4+2=6；
+若要 r-x 属性则 4+1=5。
+因此，640属性的文件表示owner用户可读可写不可执行；group用户可读不可写不可执行；other用户不可读不可写不可执行；
+
+
+# 如何找到疯狂打印日志的进程
+```
+top // 找到iowait较高或者内存占用较高的进程号，确认不是CPU负载较大
+
+iostat -x -d 1 // 查看磁盘IO使用率，iostat用yum install sysstat安装，确认是磁盘IO问题
+或者vmstat   // 相对于iostat命令，vmstat可以同时提供CPU、内存和IO的使用情况，但信息不细致。
+
+pidstat -d 1 // 找到读写操作较多的进程
+
+strace -p <PID> // 找到该进程的系统调用，包括内存映射，读写，关闭句柄等. 用yum install strace 安装
+
+strace -fp <PID> // 显示所有子进程的系统调用。有时候写操作是进程的子进程，用上一条命令看不出来
+filetop -C // filetop 是bcc软件包的一部分，基于eBPF的跟踪内核中文件的读写情况，并输出线程 ID（TID）、读写大小、读写类型以及文件名称。 安装方法见https://github.com/iovisor/bcc
+opensnoop // opensnoop也是 bcc 软件包，可以动态跟踪内核中的 open 系统调用
+
+lsof -p <PID> // 找到该进程打开的文件。用 yum install lsof 安装。这里注意lsof后面只能跟进程号，不能跟线程号
+
+```
+另外，fio是最常用的文件系统和磁盘IO性能基准测试工具，安装命令yum install -y fio
+
+# Too many open files问题
+```
+ulimit -a //查看当前可打开文件数
+ulimit -n 1048576 //临时配置可打开文件数
+永久修改方法，修改文件/etc/security/limits.conf
+*               soft nofile           1048576
+*               hard nofile           1048576
+
+```
+||
+|:--|

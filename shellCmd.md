@@ -1,4 +1,8 @@
 ### 脚本第一行 #!/bin/bash
+### 解决Linux环境下执行脚本时报错：/bin/bash^M: 坏的解释器: 没有那个文件或目录
+  ```
+  sed -i 's/\r$//' test.sh
+  ```
 ### sed 
   #### 批量替换多个文件中的字符串
   * 格式: sed -i "s/查找字段/替换字段/g" \`grep 查找字段 -rl 路径\`
@@ -27,6 +31,43 @@
 
   #### 打印指定行
     set -n "8p" test.file          打印第8行
+
+### df du
+  - df -h  显示目前所有文件系统的可用空间及使用情形
+  - du -h --max-depth=1 work/testing 查询文件或文件夹的磁盘使用空间
+    ```
+    统计总数大小
+
+    du -sh workpath/
+
+    du -sm * | sort -n //统计当前目录大小 并安大小 排序
+
+    du -sk * | sort -n
+
+    du -sk * | grep aimtag //看指定目标aimtag的大小
+
+    du -m | cut -d "/" -f 2 //看第二个/ 字符前的文字
+
+    查看此文件夹有多少文件 /*/*/* 有多少文件
+
+    du workpath/
+
+    du workpath/*/*/* |wc -l
+
+    40752
+
+    解释：
+
+    wc [-lmw]
+
+    参数说明：
+
+    -l :多少行
+
+    -m:多少字符
+
+    -w:多少字
+    ```   
 
 ### find
   ```
@@ -70,6 +111,9 @@
     awk '{print $3 "\t" $5}' name.txt   取文件的第三列和第五列并用tab键分开 
     neuron net-list|awk '{print $2}'   awk支持管道操作
     sid=`echo $line |awk '{split($2,arr,"-");print arr[4]}'` 打印改行内容并把第二列的字符以字符"-"做split操作，split的结果放在数组arr中，并打印数组的第四个元素（注意：第一个元素是arr[1], 不是arr[0]）
+
+    MANAGE_IF="172.18.0.0/16"
+    vtepif=`echo $MANAGE_IF |awk '{split($1,arr,".");print arr[1],arr[2]}'|awk '{print $1 "." $2 ".(.*)"}'` # 172.18.(.*)
   实例：逐行处理文件pod.txt和mactable.txt, 根据文件pod中每行的IP为索引，到mactable文件中查找IP对应的mac地址和interface
   ```
   #!/usr/bin/bash
@@ -83,6 +127,28 @@
     echo $ml
   done
   ```
+
+  #### 字符串替换
+  ```
+#ippools="10.100.0.0/24,10.110.0.0/24,10.120.0.0/24"
+if [[ $# > 0 ]]; then
+    # create mimic ippools by parameters
+    # read ippools from parameter
+    ippools=$1
+    # split by ","
+    array=(${ippools//,/ })
+    for var in ${array[@]}
+    do
+       echo $var
+       # transfer 10.100.0.0/24 to 10.100.0.0-24 etc..
+       index=`sed "s/\//-/g" <<< $var`
+       # fill parameters to template to create yaml
+       sed "s!{{INDEX}}!$index!g; s!{{IPPOOLCIDR}}!$var!g" ippool.yaml.template > ippool$index.yaml
+       ./calicoctl create -f ippool$index.yaml
+    done
+fi
+  ```
+
   #### 配合管道操作
   kubectl get pod -n kube-system | grep voyage-agent | awk '{system("kubectl delete pod "$1" -n kube-system")}'
 
@@ -168,9 +234,12 @@ done;
 $a(取变量a的值)
 
 $#： 位置参数个数（不包括Shell脚本名）
-$*:  位置参数组成的字符串
+$*:  位置参数组成的字符串还是传递给脚本或函数的所有参数？
 $!:   上一个后台命令对应的进程号
 $?:   上一个命令的退出状态，为十进制数字，如果返回为0，则代表执行成功。
+$0	当前脚本的文件名
+$n	传递给脚本或函数的参数。n 是一个数字，表示第几个参数。例如，第一个参数是$1，第二个参数是$2。
+$@	传递给脚本或函数的所有参数。被双引号(" ")包含时，与 $* 稍有不同，啥不同呢？
 $$:   当前的进程号PID
 ```
 * 取时间
@@ -243,6 +312,15 @@ filename1 -ot filename2 如果 filename1比 filename2旧，则为真。
 -n 判断变量的值，是否为空。若变量的值为空，返回1，为false；反之返回0，为true
 ```
 
+```
+notRunningCount=`kubectl get pods -n kube-system | grep calico-node | grep  -v Running |wc -l`
+notReadyCount=`kubectl get pods -n kube-system | grep calico-node | grep   "0/1" |wc -l`
+if [[ $notRunningCount != "0" && $notReadyCount != "0" ]]; then
+#if [ $notRunningCount -ne "0" -a $notReadyCount -ne "0" ]; then #也可以这样写，这样符号的区别
+  echo "calico-node is not ready!"
+fi
+```
+
 * switch case
 ```
 case variable in
@@ -265,6 +343,8 @@ if [[ $EtcdEndpoints == "https"* ]];then
        fi   
  fi
  ```
+或者 ``````
+
 
 #### 循环
 * while
@@ -346,6 +426,31 @@ until cp $1 $2; do
 done
 ```
 
+#### 死循环
+注意如下的while死循环do和done之间一定要有语句，否则会报错
+```
+#!/bin/bash
+
+i=1
+while : 
+do
+# do nothing, just sleep forever
+#  echo $i
+  ((i++))
+done
+
+```
+
+#### 在linux中直接敲循环命令
+```
+[root@tt]# for i in {0..3};do echo $i;done
+0
+1
+2
+3
+[root@tt]# while true; do time curl http://172.18.8.129:8090;sleep 1;done
+```
+
 #### 变量运算
 ```
 a=100
@@ -381,7 +486,12 @@ ${#pod}
 split -l 2000 BLM.txt -d -a 2 BLM_
 ```
 
-### scp 自动输入密码
+### scp 
+#### 同时拷贝多个文件
+1. scp /opt/kubernetes/{bin,ssl,cfg} root@192.168.1.2:/opt/kubernetes/
+2. scp /usr/lib/systemd/system/{kubelet,kube-proxy}.service root@192.168.1.2:/usr/lib/systemd/system
+3. 该方法同样适用于mkdir、ls、cat等命令
+#### 自动输入密码
 * 方法一，rsa秘钥
 scp 远程拷文件，建议用搭配 ssh 方法:
 1. 在客户机上生成 ssh 需要的 rsa 密钥: ssh-keygen -t rsa
@@ -455,4 +565,17 @@ cat > file.name <<EOF
 EOF
 结束
 ```
+
+如果是在脚本中就不需要加左边的>符号
+
+
+### Ctrl+快捷键
+1. Ctrl + r 搜索词 #启动反向搜索并键入命令的某些部分。它将查询历史记录，并向您显示与搜索词匹配的命令。
+2. Ctrl + A转到行的开头; Ctrl + E转到结尾
+
+## mobaxterm的使用
+该软件可下载portable版本，直接运行
+1. 添加命令快捷键：选择菜单Macro输入命令，然后点击stop进行编辑
+2. 通过跳板机跳转：编辑session,选择network settings->点击SSH Gateway填写跳板机信息
+
 

@@ -9,6 +9,9 @@
 
 4. cd ~/.ssh
 cat id_rsa.pub 然后在将终端输出的信息复制到Key中，最后直接点击Add SSH key完成SSH配置，这样 你这台设备就有权向GitHub上传代码了
+## github.com替代方案
+有时候访问github.com太慢，可以通过码云或者github.com.cnpmjs.org来下载代码
+
 
 ## 代码下载，分支切换
 git clone git@172.171.3.200:CLab/CNVP.git git clone git@172.171.3.200:CLab/ccf.git git clone git@172.171.3.200:OpenLab/ether.git
@@ -36,6 +39,7 @@ git push origin :oldBranchName  删除远程分支
 git config --list 查看config信息 或者 git config -l git remote -v 查看git远端服务器信息
 
 ### 分支创建与重命名
+可以到github的repository-branches目录下创建分支
 git branch -m oldBranchName newBranchName  重命名本地分支并推送重命名分支
 git push origin newBranchName 将重命名过的分支提交
 git clone https:github.com/... $GOPATH/src/google.golang.org/...  git clone下代码重命名
@@ -147,7 +151,7 @@ git checkout -- file.name //撤销本地文件的修改
 * 合并多次提交
   1. git rebase -i HEAD~2选择需要忽略的commit, 然后键入wq保存退出；
   2. 如果已经push了多次提交，最后git push -f推送到远端
-
+  注意，如果修改comment失败不能千万不要删除.git/rebase-merge否则将丢失所有修改。而是把文件目录备份一遍重新提交。
 
 ## 常见库在github中的目录
 * k8s.io/client-go/informers 这种也会托管在github.com/kubernetes/client-go/informers

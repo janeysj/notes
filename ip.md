@@ -1,6 +1,15 @@
 ## ip link 网络设备配置命令
 man ip link查看系统说明
 
+### 查看命令
+```
+列出所有的link: ip link list 
+查看link详情：  ip -d link show kube-ipvs0, 可以看出该端口是veth型的还是dummy网卡还是正常的网卡
+```
+#### 查看容器对应主机的端口
+1. 到容器中Cat /sys/class/net/eth0/iflink，例如得到12
+2. ip link列出来的12号端口就是该容器在主机端的veth-pair端
+
 ### ip link 设置SR-IOV端口对
 以下命令组合是创建一个容器时，为它创建SR-IOV端口及其它网络资源的命令。该端口interface-name为eth0，它是由vfnic102和vfnic107bond到一起组成的。该ep的命名空间pid为5269
 ```
@@ -83,6 +92,52 @@ docker exec -ti $(ovs-pod-id) ovs-vsctl --if-exists del-port contivVlanBridge vv
 ip link del vvport467 type veth peer name eth0 txqueuelen 0
 ```
 
+### ip link 配置IPIP模式
+```
+ 创建ns
+ip netns add ns1
+ip netns add ns2
+ 添加虚拟网卡对
+ip link add v1 type veth peer name v1_r
+ip link add v2 type veth peer name v2_r
+ip link set v1 netns ns1
+ip link set v2 netns ns2
+ 添加地址
+ip a a 10.10.10.1/24 dev v1_r
+ip l s v1_r up
+ip a a 10.10.20.1/24 dev v2_r
+ip l s v2_r up
+ip netns exec ns1 ip a a 10.10.10.2/24 dev v1
+ip netns exec ns1 ip l s v1 up
+ip netns exec ns2 ip a a 10.10.20.2/24 dev v2
+ip netns exec ns2 ip l s v2 up
+ 添加路由
+ip netns exec ns1 route add -net 10.10.20.0 netmask 255.255.255.0 gw 10.10.10.1
+ip netns exec ns2 route add -net 10.10.10.0 netmask 255.255.255.0 gw 10.10.20.1
+ 添加ip转发
+echo 1 > /proc/sys/net/ipv4/ip_forward
+Kubernetes Network IPIP Mode
+ 在 ns1 上创建 tun1 和 IPIP tunnel
+ip netns exec ns1 ip tunnel add tun1 mode ipip remote 10.10.20.2 local 10.10.10.2
+ip netns exec ns1 ip l s tun1 up
+ip netns exec ns1 ip a a 10.10.100.10 peer 10.10.200.10 dev tun1
+ 在 ns2 上创建 tun1 和 IPIP tunnel
+ip netns exec ns2 ip tunnel add tun2 mode ipip remote 10.10.10.2 local 10.10.20.2
+ip netns exec ns2 ip l s tun2 up
+ip netns exec ns2 ip a a 10.10.200.10 peer 10.10.100.10 dev tun2
+上面的命令是在 NS1 上创建 tun 设备 tun1，并设置隧道模式为 ipip，然后还需要设置隧道端点，用 remote 和 local 
+表示，这是 隧道外层 IP，对应的还有 隧道内层 IP，用 ip addr xx peer xx 配置。
+# ip netns exec ns1 ping 10.10.200.10 -c 4
+PING 10.10.200.10 (10.10.200.10) 56(84) bytes of data.
+64 bytes from 10.10.200.10: icmp_seq=1 ttl=64 time=0.090 ms
+64 bytes from 10.10.200.10: icmp_seq=2 ttl=64 time=0.148 ms
+64 bytes from 10.10.200.10: icmp_seq=3 ttl=64 time=0.112 ms
+64 bytes from 10.10.200.10: icmp_seq=4 ttl=64 time=0.110 ms
+--- 10.10.200.10 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.090/0.115/0.148/0.020 ms
+```
+
 ## ip route 路由设置
  - ip route  //查看所有路由
 route add default gw 10.243.5.222 eth0
@@ -106,3 +161,9 @@ ip route add default via 10.243.39.126 dev eth1 table 16
 ip rule add from 10.243.39.98/27 lookup 16
 ```
 
+## 删除网桥端口
+ip a 看到端口br-d70cd48149bc是down的，并且是多余的。可以用如下命令删除：
+ip l delete  br-d70cd48149bc
+
+## 查看tuntap设备
+ip tuntap list

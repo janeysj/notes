@@ -118,6 +118,10 @@ tc filter add dev cali4312dcf99b3 protocol ip parent 1:0 prio 1 u32 match ip src
 ```
 6. 利用ifb0的缺点是对应真实网卡如果down再up起来，ifb0上的规则会自动消失，需要watch到该事件并重新添加规则
 
+## tbf 限速
+- tc qdisc change dev calia76646c4473  root tbf rate 2Mbit latency 50ms burst 2000 mpu 64 mtu 150000
+- tc qdisc change dev bwpee838893af79 root tbf rate 2Mbit latency 50ms burst 2000 mpu 64 mtu 150000
+
 ## 模拟网络故障
 使用了linux内核netem模块，首先要确认安装了netem模块 ```lsmod |grep netem```, 如果没有需要安装 kernel-modules-extra， 注意kernel-modules-extra的版本要和linux-kernel版本相同。如果是centos系统，可以通过命令``` yum install kernel-modules-extra-4.18.0-80.11.1.el7.centos.sn8.x86_64```安装该模块。可以通过命令```hostnamectl```查看内核版本信息。
 
@@ -150,3 +154,6 @@ tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:10 match ip spo
 # 10 号队列的包全部丢掉
 tc qdisc add dev eth0 parent 1:10 handle 10: netem loss 100%
 ``` 
+
+## 常见问题
+1. 限速后前一秒流量较大，后面正常。一般是因为burst值设置较大的。
