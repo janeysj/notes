@@ -156,3 +156,12 @@ git checkout -- file.name //撤销本地文件的修改
 ## 常见库在github中的目录
 * k8s.io/client-go/informers 这种也会托管在github.com/kubernetes/client-go/informers
 * golang.org/x/ 这种也会托管在github.com/golang/...
+
+## 代理的设置与清除
+```
+git config --global http.proxy http://127.0.0.1:1080
+git config --global https.proxy https://127.0.0.1:1080
+
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+```
