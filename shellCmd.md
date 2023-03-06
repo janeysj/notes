@@ -4,6 +4,7 @@
   sed -i 's/\r$//' test.sh
   ```
 ### sed 
+  -i 表示替换原文件
   #### 批量替换多个文件中的字符串
   * 格式: sed -i "s/查找字段/替换字段/g" \`grep 查找字段 -rl 路径\`
 
@@ -24,13 +25,28 @@
   sed -i 's/^/HEAD&/g' test.file  在文件的每一行头添加字符HEAD
   sed -i 's/$/&TAIL/g' test.file  在文件的每一行尾添加字符TAIL
   ```
+  * 删除所有的空行
+  ```
+  sed -i '/^\s*$/d' file.txt
+  ```
   #### 删除指定行、指定列
-    sed -i '1d' netplugin.log     删除二进制log的第一行
+    sed -i '1d' netplugin.log     删除二进制log的第一行, d表示delete
+  #### 删除包含指定字符的行
+    sed -i '/关键字符/d' 文件名    
   #### 删除file的每一行前n个字符n=.的个数
     sed -i 's/^......//' filename
 
+  #### 在文件的第一行添加 Hello World
+    sed -i  -e '1i Hello World.' /etc/rc.local    # 第一个i表示替换原文件，第二个i表示insert, 1表示第一行
+
   #### 打印指定行
-    set -n "8p" test.file          打印第8行
+    set -n "8p" test.file          打印第8行    
+
+  #### sed命令中使用变量
+    sed -i "/${gw}/d" /etc/rc.local    
+
+  #### 输出一行中的数字
+    sed 's/[^0-9]//g'    # 意思是把非0-9的字符都删掉，因此就只剩数字了，同理还可以有 sed 's/[^a-z]//g'
 
 ### df du
   - df -h  显示目前所有文件系统的可用空间及使用情形
@@ -72,10 +88,23 @@
 ### find
   ```
   find api/ -name "*.go" 查找api目录下所有的go文件
+  find ./ -name "*.yaml" -or -name "*.yml" //查找当前目录下以yaml或者yml结尾的文件
   find /etc/ | xargs grep paste --color=auto
   find ~ -empty (查找home目录下的所有空文件)
   find /home/* -mtime +3 -delete  查找 /home/目录下所有三天前的文件，并删除。
   ```
+
+### grep
+```
+// 查找k8s_cluster_cidr值中指定字符串cluster-cidr后面的内容, -o 只展示部分信息
+echo $k8s_cluster_cidr|grep -o "cluster-cidr=.*"|awk -F"=" '{print $2}'|awk '{print $1}'
+// 查找包含calico或者flannel或者multus的行, -E 表示使用expression正则表达式
+grep -E 'calico|flannel|multus'
+// 只查找完整单词，不是前缀、中间或者后缀
+grep -w China
+// 反向查找，排除包含Japan的内容
+grep -v Japan
+```
 
 ### wc
   计算输入的行数、单词数、字符数和字节数，一般和管道一起使用。
@@ -241,6 +270,8 @@ $0	当前脚本的文件名
 $n	传递给脚本或函数的参数。n 是一个数字，表示第几个参数。例如，第一个参数是$1，第二个参数是$2。
 $@	传递给脚本或函数的所有参数。被双引号(" ")包含时，与 $* 稍有不同，啥不同呢？
 $$:   当前的进程号PID
+${@:2} 当脚本有多个参数时，取第二个参数之后的所有参数
+${@:3:1} 当脚本有多个参数时，取第3个参数之后的1个参数
 ```
 * 取时间
 ```
@@ -277,10 +308,14 @@ $命令  参数1   参数2  参数3
 ```
 #### 输出值
 * echo 
+```
+echo $fix_ippool
+echo "/root/auto-calico-route.sh ${calico_ippool} ${fix_ippool} ${gw}" >> /etc/rc.local //双引号能取变量的值，单引号不行. 把这句话追加到文件最后一行
+```
 * cat
 
 #### 判断
-* if else，注意方括号左右要有一个空格
+* if else，注意方括号左右要有一个空格;注意if then else fi语句中，then和else直接要有一句话，不能then后面直接加else.
 ```
 if test-commands; then
     consequence-command;
@@ -417,6 +452,35 @@ done
 实例4：ssh上每一个标签node-network-driver为ovs的节点上执行命令
 for i in \`kubectl get nodes -o wide --show-labels|grep node-network-driver=ovs| awk '{print $6;}'\` ; do ssh ${i} docker exec -i $(ssh ${i} docker ps --filter "name=k8s_voyage-openvswitch" -q) ovs-vsctl set-controller contivVlanBridge; done
 
+实例5：在容器名带有Tag的网络命名空间执行命令
+```
+cat docker-enter-cmd.sh
+#!/bin/bash
+if [ $# == 0 ]; then
+  echo -e "\033[31m Please input docker name tag \033[0m"
+  exit 0
+fi
+
+dockertag=$1
+if [ $# == 1 ]; then
+  echo -e "\033[31m Please input command for the tagged docker \033[0m"
+  exit 0
+fi
+dockerid=`docker ps|grep $dockertag|awk 'NR==1{print}'|awk '{print $1}'`
+echo -e "\033[31m docker ID: "$dockerid
+if [ $dockerid == '' ]; then
+  echo " No such pod"
+  exit 0
+fi
+pid=`docker inspect $dockerid|grep -w Pid|sed 's/[^0-9]//g'`
+echo " docker Pid: "$pid
+echo " exec \"" ${@:2}  "\" inside the docker with " $1 "name tag"
+echo -e "------------------\033[0m"
+nsenter -t $pid -n -F -- ${@:2}
+
+
+```
+
 * util
 ```
 until cp $1 $2; do
@@ -498,20 +562,95 @@ scp 远程拷文件，建议用搭配 ssh 方法:
 2. 把生成的 id_rsa.pub拷到远程服务器用户的 .ssh 目录下，并更名为authorized_keys
 这样一来，scp 拷文件就不需要密码了
 
-* 方法二，expect 命令交互
+* 方法二，sshpass 二进制命令文件，比expect的优点是不依赖环境库  
+注意：如果把脚本A拷贝到远端多个节点，再用sshpass远程执行该脚本A，那么脚本A要尽量简单，最好不要有output否则会有意想不到的错误
 ```
-#！/bin/bash
-expect -c "
-set timeout 1200; ##设置拷贝的时间，根据目录大小决定，我这里是1200秒。
-spawn /usr/bin/scp -r 192.168.0.201:/work/backup/db_back/ /work/dbback/
+  sshpass -p ${PASSWD[$i]} ssh -o StrictHostKeyChecking=no ${USERNAME[$i]}@${NODE[$i]} /etc/cron.hourly/auto-add-calico-route
+  sshpass -p ${PASSWD[$i]} scp -o StrictHostKeyChecking=no -r  rc.local ${USERNAME[$i]}@${NODE[$i]}:/etc/
+  sshpass -p ${PASSWD[$i]} ssh -o StrictHostKeyChecking=no ${USERNAME[$i]}@${NODE[$i]} chmod +x /etc/rc.local
+  sshpass -p ${PASSWD[$i]} ssh -o StrictHostKeyChecking=no ${USERNAME[$i]}@${NODE[$i]} systemctl enable rc-local
+  sshpass -p ${PASSWD[$i]} ssh -o StrictHostKeyChecking=no ${USERNAME[$i]}@${NODE[$i]} systemctl restart rc-local
+
+```
+
+* 方法三，expect 命令交互
+```
+#!/bin/bash
+# You must install expect tool on each node.
+# This script will enable rc.local service specially for ubuntu OS by auto-calico-route.sh
+# Maybe you should type ctrl+c when shell pause while executing 'systemctl restart rc-local' on remote nodes
+hosts=${1:-172.18.8.152,172.18.8.153,172.18.8.154,172.18.8.161,172.18.8.162,172.18.8.163}
+usernames=${2:-root,root,root,root,root,root}
+passwds=${3:-password,kylin@123,password,password,kylin@123,password}
+CALICO_IPPOOL=${4:-10.26.0.0/16}
+FIX_IPPOOL=${5:-10.251.0.0/16}
+gw=${6:-100.200.0.1/24}
+
+NODE=(${hosts//,/ })
+USERNAME=(${usernames//,/ })
+PASSWD=(${passwds//,/ })
+nodeCount=`echo $NODE|wc -l`
+GW=`echo $gw |awk '{split($1,arr,"/");print arr[1]}'`
+for ((i=0; i<${#NODE[@]}; i ++))
+do
+echo "ssh "${USERNAME[$i]}@${NODE[$i]} " on "${NODE[$i]}
+/usr/bin/expect<<-EOF
+set timeout 60;
+spawn  scp -r auto-add-calico-route.sh ${NODE[$i]}:/root/
 expect {
-\"*yes/no*\" {send \"yes\r\"; exp_continue}
-\"*password*\" {send \"123456\r\";} ##远程IP的密码。
+"*yes/no" {send "yes\r"; exp_continue}
+"*password:" {send "${PASSWD[$i]}\r";}
 }
-expect eof;"
+spawn ssh ${USERNAME[$i]}@${NODE[$i]}
+expect {
+"*yes/no" {send "yes\r"; exp_continue}
+"*password:" {send "${PASSWD[$i]}\r";}
+}
+expect "*#"
+send "/root/auto-add-calico-route.sh $CALICO_IPPOOL $FIX_IPPOOL $GW\r"
+send "ip route\r"
+expect "*#"
+send "exit\r"
+expect eof
+EOF
+done;
 ```
 如果不设置timeout的话会自动退出，所以必须设置，或者用default字段可以设置expect超时或退出时的动作。
 expect用于自动化地执行linux环境下的命令行交互任务，例如scp、ssh之类需要用户手动输入密码然后确认的任务。有了这个工具，定义在scp过程中可能遇到的情况，然后编写相应的处理语句，就可以自动地完成scp操作了。
+
+下面是拷贝一个脚本到一系列节点，并ssh到这些节点执行该脚本的脚本
+```
+#!/bin/bash
+index=(0 1 2 3 4 5)
+NODES=("172.18.8.152" "172.18.8.153" "172.18.8.154" "172.18.8.161" "172.18.8.162" "172.18.8.163")
+PASSWD=("password"    "kylin@123"    "password"     "password"     "kylin@123"    "password")
+CALICO_IPPOOL="10.26.0.0/16"
+FIX_IPPOOL="10.251.0.0/16"
+GW="100.200.0.1"
+for i in ${index[@]}
+do
+/usr/bin/expect<<-EOF
+set timeout 60;
+spawn  scp -r auto-calico-route.sh ${NODES[$i]}:/root/
+expect {
+"*yes/no" {send "yes\r"; exp_continue}
+"*password:" {send "${PASSWD[$i]}\r";} 
+}
+spawn ssh root@${NODES[$i]}
+expect {
+"*yes/no" {send "yes\r"; exp_continue}
+"*password:" {send "${PASSWD[$i]}\r";} 
+}
+expect "*#"
+send "/root/auto-calico-route.sh $CALICO_IPPOOL $FIX_IPPOOL $GW\r"
+send "ip route\r"
+expect "*#"
+send "exit\r"
+expect eof
+EOF
+done;
+
+```
 
 ### sort 自动排列
 ```
@@ -579,3 +718,8 @@ EOF
 2. 通过跳板机跳转：编辑session,选择network settings->点击SSH Gateway填写跳板机信息
 
 
+### beyondCompare4密钥过期解决
+ - 删除C:\Users\Lenovo\AppData\Roaming\Scooter Software\Beyond Compare 4下的所有文件，重启Beyond Compare 4即可（注意：用户名下的AppData文件夹有可能会被隐藏起来）
+ - 删除D:\Program Files\Beyond Compare 4\BCUnRAR.dll 可以恢复30天试用期 (先试上面的，不行再试这个)
+ - 重新输入密钥进行注册
+ 

@@ -129,6 +129,7 @@ tc filter add dev cali4312dcf99b3 protocol ip parent 1:0 prio 1 u32 match ip src
  - tc  qdisc  add  dev  eth0  root  netem  delay  100ms  //延迟100毫秒发送
  - tc  qdisc  add  dev  eth0  root  netem  delay  100ms  10ms  //延迟 100ms ± 10ms （90 ~ 110 ms 之间的任意值)发送
  - tc  qdisc  add  dev  eth0  root  netem  delay  100ms  10ms  30%   //大约有 30% 的包会延迟 ± 10ms 发送
+ - tc -s qdisc show dev eth0 //查看配置
 
 ### 模拟网络丢包
  - tc  qdisc  add  dev  eth0  root  netem  loss  1%  //随机丢掉 1% 的数据包

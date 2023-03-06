@@ -167,3 +167,9 @@ ip l delete  br-d70cd48149bc
 
 ## 查看tuntap设备
 ip tuntap list
+
+## ip neigh 查看ARP表
+
+## 配置MTU
+`$ sudo ip link set enp0s3 mtu 1400`  
+MTU 本身是三层的概念默认大小是1500，而在第四层的 TCP 层面，有个对应的概念叫 MSS(Maximum Segment Size)也就是单纯的 TCP 载荷的最大尺寸。MTU 是三层报文的大小，在 MTU 的基础上刨去 IP 头部 20 字节和 TCP 头部 20 字节，就得到了最常见的 MSS 1460 字节

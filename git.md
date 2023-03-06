@@ -18,6 +18,8 @@ git clone git@172.171.3.200:CLab/CNVP.git git clone git@172.171.3.200:CLab/ccf.g
 
 git clone git@source.jd.com:app/jcloud-neutron.git
 
+git clone  -c http.proxy="http://172.18.8.7:7890" https://github.com/xxx 设置下载代理
+
 git branch -a 查看分支 git branch 查看当前目录的所有分支
 
 git checkout -b draft remotes/origin/draft 切换到一个新分支 'newfeature'//然后要把本地代码推送到远端git push 本地远端的名字要一样
@@ -29,6 +31,8 @@ git pull 拉下新的分支（not clone），然后才能checkout到此分支
 git checkout -- filename 下载指定文件夹
 
 git checkout 123-version 下载指定版本
+
+在使用Tortoise Git时，推送代码提示认证失败，因为修改了密码，但是在Tortoise Git的设置里面没有找到改密码的地方，原来Tortoise Git使用Windows的凭据保存用户名密码，进入控制面板，找到Windows凭据管理删除对应密码再次下载会提示你输入新密码。
 
 ## 分支管理
 ### 分支删除

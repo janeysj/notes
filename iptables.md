@@ -100,6 +100,10 @@ iptables-restore < iptables.bak //恢复备份文件中的规则
 ipvsadm -Ln
 ```
 
+# 修改网络协议参数
+```
+iptables -A FORWARD -p tcp --tcp-flags SYN SYN -j TCPMSS --set-mss 1400
+```
 
 ### 参考文档
 - 杜军《Kubernetes网络权威指南》电子工业出版社
